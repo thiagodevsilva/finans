@@ -1,2 +1,2 @@
 # finans
- Aplicativo de finanças.
+ Modelo de layout para aplicativo de finanças.
