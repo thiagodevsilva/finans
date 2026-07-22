@@ -9,18 +9,6 @@ COPY public ./public
 RUN npm run build
 
 
-FROM composer:2 AS vendor
-
-WORKDIR /app
-COPY composer.json composer.lock ./
-RUN composer install \
-    --no-dev \
-    --no-scripts \
-    --no-interaction \
-    --prefer-dist \
-    --optimize-autoloader
-
-
 FROM php:8.3-fpm-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -54,8 +42,15 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
+COPY composer.json composer.lock ./
+RUN composer install \
+    --no-dev \
+    --no-scripts \
+    --no-interaction \
+    --prefer-dist \
+    --optimize-autoloader
+
 COPY . .
-COPY --from=vendor /app/vendor ./vendor
 COPY --from=frontend /app/public/build ./public/build
 
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
@@ -63,7 +58,6 @@ COPY docker/php/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/php/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN composer dump-autoload --optimize \
-    && sed -i 's/fastcgi_pass app:9000;/fastcgi_pass 127.0.0.1:9000;/' /etc/nginx/conf.d/default.conf \
     && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R ug+rwx storage bootstrap/cache \
     && chmod +x /usr/local/bin/docker-entrypoint.sh \
