@@ -1,0 +1,15 @@
+---
+description: Convenções Laravel do Levita — controllers, requests, policies, Eloquent
+globs: app/**/*.php,routes/**/*.php,database/**/*.php,tests/**/*.php
+alwaysApply: false
+---
+
+# Laravel
+
+- Controllers finos: validação em Form Requests; autorização em Policies/`authorize`.
+- Models Eloquent com `$fillable`/`$casts` explícitos; UUID/ULID como string IDs quando usado.
+- Migrations: índices em `account_id`, `date`, `type`, `category_id` quando aplicável.
+- Preferir `DB::transaction` ao criar Account + Owner + categorias.
+- Senhas sempre via `Hash::make` / cast `hashed`.
+- Respostas Inertia: `Inertia::render` com props tipadas e mínimas.
+- Feature tests cobrem RBAC e isolamento entre accounts.

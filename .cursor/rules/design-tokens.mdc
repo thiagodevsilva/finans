@@ -1,0 +1,15 @@
+---
+description: Identidade visual Levita — amarelo, CTA azul, layout Horizon adaptado
+globs: resources/**/*.{vue,css,blade.php},tailwind.config.js
+alwaysApply: false
+---
+
+# Design Levita
+
+- Primário (brand): `#ffc107` — destaques, barra ativa da sidebar, hero.
+- CTA: `#2563eb` — botões principais.
+- Fundo app: `lightPrimary` `#F4F7FE`; cards brancos `rounded-[20px]` + `shadow-soft`.
+- Tipografia: DM Sans (do Horizon).
+- Layout autenticado: sidebar branca estilo Horizon + acento amarelo; não copiar purple do template.
+- Landing: hero amarelo + `capa-mulher.png`.
+- Auth (GuestLayout): painel amarelo lateral com foto, formulário à esquerda.

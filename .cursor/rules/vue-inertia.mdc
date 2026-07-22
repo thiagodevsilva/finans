@@ -1,0 +1,14 @@
+---
+description: Convenções Vue 3 + Inertia para páginas do app Levita
+globs: resources/js/**/*.{vue,js,ts}
+alwaysApply: false
+---
+
+# Vue + Inertia
+
+- Páginas em `resources/js/Pages/`; layout autenticado: `AppLayout.vue`.
+- Usar `<Link>` / `router` do Inertia; formulários com `useForm`.
+- Textos da UI em pt-BR; moeda com formatador BRL (`R$`).
+- Sidebar: Dashboard, Transações, Categorias, Dependentes, Relatórios.
+- Componentes simples; sem cards decorativos desnecessários.
+- Ocultar ações de owner (categorias CRUD, membros) quando `user.role !== 'owner'`.

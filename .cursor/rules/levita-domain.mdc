@@ -1,0 +1,31 @@
+---
+description: Domínio Levita — account_id, papéis owner/dependent e regras de negócio
+alwaysApply: true
+---
+
+# Domínio Levita
+
+## Isolamento
+
+- Toda query de Category, Transaction e listagem de User (membros) deve filtrar por `account_id` do usuário autenticado.
+- Use o trait `BelongsToAccount` / global scope. Nunca confie só no ID da URL.
+
+## Papéis
+
+| Ação | Owner | Dependent |
+|------|-------|-----------|
+| Ver transações da conta | sim | sim |
+| Criar transação | sim | sim |
+| Editar/excluir qualquer transação | sim | não |
+| Editar/excluir própria transação | sim | sim |
+| CRUD categorias | sim | não (só listar) |
+| Adicionar/remover dependentes | sim | não |
+
+## Conta
+
+- Cadastro cria `Account` + `User` owner + categorias padrão na mesma transação DB.
+- Não permitir remover o último owner nem o próprio usuário se for o único owner.
+
+## Categorias padrão
+
+Alimentação, Transporte, Saúde, Lazer, Moradia, Educação, Salário, Outros.
