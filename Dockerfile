@@ -1,8 +1,33 @@
+FROM php:8.3-cli-bookworm AS vendor
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        unzip \
+        libzip-dev \
+    && docker-php-ext-install zip \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install \
+    --no-dev \
+    --no-scripts \
+    --no-interaction \
+    --prefer-dist \
+    --optimize-autoloader
+
+
 FROM node:22-alpine AS frontend
 
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
+
+# Ziggy é importado de vendor/ no Vite
+COPY --from=vendor /app/vendor/tightenco/ziggy ./vendor/tightenco/ziggy
+
 COPY vite.config.js tailwind.config.js postcss.config.js ./
 COPY resources ./resources
 COPY public ./public
@@ -42,15 +67,8 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-COPY composer.json composer.lock ./
-RUN composer install \
-    --no-dev \
-    --no-scripts \
-    --no-interaction \
-    --prefer-dist \
-    --optimize-autoloader
-
 COPY . .
+COPY --from=vendor /app/vendor ./vendor
 COPY --from=frontend /app/public/build ./public/build
 
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
