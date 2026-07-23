@@ -4,15 +4,27 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import { PAYMENT_METHODS } from '@/utils/format';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 
 const props = defineProps({
     transaction: Object,
     categories: Array,
+    paymentCards: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const isEdit = computed(() => !!props.transaction);
+
+const initialMethod = () => {
+    if (props.transaction?.payment_method === 'card' && props.transaction?.payment_card_id) {
+        return `card:${props.transaction.payment_card_id}`;
+    }
+    return props.transaction?.payment_method || 'cash';
+};
 
 const form = useForm({
     type: props.transaction?.type || 'expense',
@@ -20,7 +32,24 @@ const form = useForm({
     description: props.transaction?.description || '',
     category_id: props.transaction?.category_id || '',
     date: props.transaction?.date?.slice?.(0, 10) || props.transaction?.date || new Date().toISOString().slice(0, 10),
+    payment_selection: initialMethod(),
+    payment_method: props.transaction?.payment_method || 'cash',
+    payment_card_id: props.transaction?.payment_card_id || null,
 });
+
+watch(
+    () => form.payment_selection,
+    (value) => {
+        if (String(value).startsWith('card:')) {
+            form.payment_method = 'card';
+            form.payment_card_id = String(value).slice(5);
+        } else {
+            form.payment_method = value;
+            form.payment_card_id = null;
+        }
+    },
+    { immediate: true },
+);
 
 const submit = () => {
     if (isEdit.value) {
@@ -69,6 +98,29 @@ const submit = () => {
                     <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
                 <InputError class="mt-2" :message="form.errors.category_id" />
+            </div>
+
+            <div>
+                <InputLabel value="Forma de pagamento" />
+                <select v-model="form.payment_selection" class="mt-1 block w-full rounded-md border-slate-300" required>
+                    <optgroup label="Geral">
+                        <option v-for="m in PAYMENT_METHODS" :key="m.value" :value="m.value">{{ m.label }}</option>
+                    </optgroup>
+                    <optgroup v-if="paymentCards.length" label="Cartões">
+                        <option
+                            v-for="card in paymentCards"
+                            :key="card.id"
+                            :value="`card:${card.id}`"
+                        >
+                            {{ card.name }} •••• {{ card.last_four }}{{ card.user?.name ? ` (${card.user.name})` : '' }}
+                        </option>
+                    </optgroup>
+                </select>
+                <InputError class="mt-2" :message="form.errors.payment_method || form.errors.payment_card_id" />
+                <p v-if="!paymentCards.length" class="mt-1 text-xs text-horizon-500">
+                    Sem cartões? Cadastre em
+                    <Link :href="route('payment-cards.index')" class="text-cta hover:underline">Cartões</Link>.
+                </p>
             </div>
 
             <div>

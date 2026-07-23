@@ -16,6 +16,21 @@ class Transaction extends Model
 
     public const TYPE_EXPENSE = 'expense';
 
+    public const PAYMENT_CASH = 'cash';
+
+    public const PAYMENT_PIX = 'pix';
+
+    public const PAYMENT_TRANSFER = 'transfer';
+
+    public const PAYMENT_CARD = 'card';
+
+    public const PAYMENT_METHODS = [
+        self::PAYMENT_CASH,
+        self::PAYMENT_PIX,
+        self::PAYMENT_TRANSFER,
+        self::PAYMENT_CARD,
+    ];
+
     protected $fillable = [
         'account_id',
         'user_id',
@@ -24,6 +39,8 @@ class Transaction extends Model
         'amount',
         'description',
         'date',
+        'payment_method',
+        'payment_card_id',
     ];
 
     protected $casts = [
@@ -46,8 +63,24 @@ class Transaction extends Model
         return $this->belongsTo(Category::class);
     }
 
+    public function paymentCard(): BelongsTo
+    {
+        return $this->belongsTo(PaymentCard::class, 'payment_card_id');
+    }
+
     public function isIncome(): bool
     {
         return $this->type === self::TYPE_INCOME;
+    }
+
+    public static function paymentMethodLabel(string $method): string
+    {
+        return match ($method) {
+            self::PAYMENT_CASH => 'Dinheiro',
+            self::PAYMENT_PIX => 'PIX',
+            self::PAYMENT_TRANSFER => 'Transferência',
+            self::PAYMENT_CARD => 'Cartão',
+            default => $method,
+        };
     }
 }

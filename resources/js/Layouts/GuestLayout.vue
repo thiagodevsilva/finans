@@ -1,4 +1,5 @@
 <script setup>
+import AppMark from '@/Components/AppMark.vue';
 import { Link } from '@inertiajs/vue3';
 </script>
 
@@ -9,8 +10,9 @@ import { Link } from '@inertiajs/vue3';
                 ← Voltar ao início
             </Link>
 
-            <Link :href="route('home')" class="mb-6 w-max text-2xl font-bold text-navy-700">
-                Levita
+            <Link :href="route('home')" class="mb-6 flex w-max items-center gap-3">
+                <AppMark :size="44" />
+                <span class="text-2xl font-bold tracking-tight text-navy-700 md:text-3xl">Levita</span>
             </Link>
 
             <div class="w-full max-w-md">

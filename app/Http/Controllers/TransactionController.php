@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\TransactionRequest;
 use App\Models\Category;
+use App\Models\PaymentCard;
 use App\Models\Transaction;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -26,7 +27,11 @@ class TransactionController extends Controller
         $end = (clone $start)->endOfMonth();
 
         $transactions = Transaction::query()
-            ->with(['category:id,name,color', 'user:id,name'])
+            ->with([
+                'category:id,name,color',
+                'user:id,name',
+                'paymentCard:id,name,brand,last_four,color',
+            ])
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->when($type, fn ($q) => $q->where('type', $type))
             ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
@@ -54,6 +59,7 @@ class TransactionController extends Controller
         return Inertia::render('Transactions/Form', [
             'transaction' => null,
             'categories' => Category::query()->orderBy('name')->get(['id', 'name', 'color']),
+            'paymentCards' => $this->paymentCardsForForm(),
         ]);
     }
 
@@ -75,8 +81,9 @@ class TransactionController extends Controller
         $this->authorize('update', $transaction);
 
         return Inertia::render('Transactions/Form', [
-            'transaction' => $transaction,
+            'transaction' => $transaction->load('paymentCard:id,name,brand,last_four,color'),
             'categories' => Category::query()->orderBy('name')->get(['id', 'name', 'color']),
+            'paymentCards' => $this->paymentCardsForForm(),
         ]);
     }
 
@@ -96,5 +103,13 @@ class TransactionController extends Controller
         $transaction->delete();
 
         return redirect()->route('transactions.index')->with('success', 'Transação excluída com sucesso.');
+    }
+
+    private function paymentCardsForForm()
+    {
+        return PaymentCard::query()
+            ->with('user:id,name')
+            ->orderBy('name')
+            ->get(['id', 'name', 'brand', 'last_four', 'color', 'user_id']);
     }
 }

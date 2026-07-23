@@ -25,7 +25,11 @@ class DashboardController extends Controller
         $expense = (clone $base)->where('type', Transaction::TYPE_EXPENSE)->sum('amount');
 
         $recent = Transaction::query()
-            ->with(['category:id,name,color', 'user:id,name'])
+            ->with([
+                'category:id,name,color',
+                'user:id,name',
+                'paymentCard:id,name,brand,last_four,color',
+            ])
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->orderByDesc('date')
             ->orderByDesc('created_at')

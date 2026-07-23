@@ -3,17 +3,24 @@
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MemberController;
+use App\Http\Controllers\PaymentCardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
-Route::view('/', 'landing')->name('home');
+Route::get('/', fn () => Inertia::render('Landing'))->name('home');
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
     Route::resource('transactions', TransactionController::class)->except(['show']);
+
+    Route::get('/payment-cards', [PaymentCardController::class, 'index'])->name('payment-cards.index');
+    Route::post('/payment-cards', [PaymentCardController::class, 'store'])->name('payment-cards.store');
+    Route::put('/payment-cards/{payment_card}', [PaymentCardController::class, 'update'])->name('payment-cards.update');
+    Route::delete('/payment-cards/{payment_card}', [PaymentCardController::class, 'destroy'])->name('payment-cards.destroy');
 
     Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
     Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');

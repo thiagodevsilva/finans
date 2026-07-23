@@ -23,6 +23,8 @@ class TransactionFactory extends Factory
             'amount' => fake()->randomFloat(2, 10, 500),
             'description' => fake()->sentence(3),
             'date' => now()->toDateString(),
+            'payment_method' => Transaction::PAYMENT_CASH,
+            'payment_card_id' => null,
         ];
     }
 }

@@ -1,4 +1,5 @@
 <script setup>
+import AppMark from '@/Components/AppMark.vue';
 import { computed, ref } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 
@@ -11,6 +12,7 @@ const mobileOpen = ref(false);
 const links = [
     { name: 'Dashboard', route: 'dashboard', match: 'dashboard' },
     { name: 'Transações', route: 'transactions.index', match: 'transactions.*' },
+    { name: 'Cartões', route: 'payment-cards.index', match: 'payment-cards.*' },
     { name: 'Categorias', route: 'categories.index', match: 'categories.*' },
     { name: 'Dependentes', route: 'members.index', match: 'members.*' },
     { name: 'Relatórios', route: 'reports.index', match: 'reports.*' },
@@ -27,8 +29,9 @@ const isActive = (match) => route().current(match);
             :class="mobileOpen ? 'translate-x-0' : '-translate-x-full xl:translate-x-0'"
         >
             <div class="mx-8 mt-10 flex items-center justify-between">
-                <Link :href="route('dashboard')" class="font-dm text-[22px] font-bold uppercase text-navy-700">
-                    Levita
+                <Link :href="route('dashboard')" class="flex items-center gap-2.5">
+                    <AppMark :size="36" />
+                    <span class="font-dm text-[22px] font-bold tracking-tight text-navy-700">Levita</span>
                 </Link>
                 <button type="button" class="text-horizon-500 xl:hidden" @click="mobileOpen = false">✕</button>
             </div>
@@ -71,11 +74,14 @@ const isActive = (match) => route().current(match);
         <div v-if="mobileOpen" class="fixed inset-0 z-40 bg-navy-900/40 xl:hidden" @click="mobileOpen = false" />
 
         <div class="flex min-w-0 flex-1 flex-col xl:ml-0">
-            <header class="sticky top-0 z-30 flex items-center justify-between bg-lightPrimary/80 px-4 py-4 backdrop-blur xl:hidden">
+            <header class="sticky top-0 z-30 flex items-center justify-between bg-lightPrimary/80 px-4 py-3 backdrop-blur xl:hidden">
                 <button type="button" class="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-navy-700 shadow-soft" @click="mobileOpen = true">
                     Menu
                 </button>
-                <span class="font-bold text-navy-700">Levita</span>
+                <span class="flex items-center gap-2 font-bold text-navy-700">
+                    <AppMark :size="28" />
+                    Levita
+                </span>
                 <span class="w-14" />
             </header>
 
