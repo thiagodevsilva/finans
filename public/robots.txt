@@ -1,2 +1,18 @@
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /dashboard
+Disallow: /transactions
+Disallow: /bank-accounts
+Disallow: /payment-cards
+Disallow: /categories
+Disallow: /members
+Disallow: /reports
+Disallow: /profile
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /confirm-password
+
+Sitemap: /sitemap.xml

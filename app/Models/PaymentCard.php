@@ -31,11 +31,22 @@ class PaymentCard extends Model
         self::BRAND_OTHER,
     ];
 
+    public const TYPE_CREDIT = 'credit';
+
+    public const TYPE_DEBIT = 'debit';
+
+    public const TYPES = [
+        self::TYPE_CREDIT,
+        self::TYPE_DEBIT,
+    ];
+
     protected $fillable = [
         'account_id',
         'user_id',
+        'bank_account_id',
         'name',
         'brand',
+        'type',
         'last_four',
         'color',
     ];
@@ -48,6 +59,11 @@ class PaymentCard extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function bankAccount(): BelongsTo
+    {
+        return $this->belongsTo(BankAccount::class, 'bank_account_id');
     }
 
     public function transactions(): HasMany
@@ -63,6 +79,14 @@ class PaymentCard extends Model
             self::BRAND_ELO => 'Elo',
             self::BRAND_AMEX => 'Amex',
             default => 'Outro',
+        };
+    }
+
+    public static function typeLabel(string $type): string
+    {
+        return match ($type) {
+            self::TYPE_DEBIT => 'Débito',
+            default => 'Crédito',
         };
     }
 }

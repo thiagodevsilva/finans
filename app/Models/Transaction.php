@@ -41,6 +41,7 @@ class Transaction extends Model
         'date',
         'payment_method',
         'payment_card_id',
+        'bank_account_id',
     ];
 
     protected $casts = [
@@ -66,6 +67,11 @@ class Transaction extends Model
     public function paymentCard(): BelongsTo
     {
         return $this->belongsTo(PaymentCard::class, 'payment_card_id');
+    }
+
+    public function bankAccount(): BelongsTo
+    {
+        return $this->belongsTo(BankAccount::class, 'bank_account_id');
     }
 
     public function isIncome(): bool

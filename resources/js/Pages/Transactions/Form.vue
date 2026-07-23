@@ -4,7 +4,7 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
-import { PAYMENT_METHODS } from '@/utils/format';
+import { PAYMENT_METHODS, formatCardLabel } from '@/utils/format';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, watch } from 'vue';
 
@@ -12,6 +12,10 @@ const props = defineProps({
     transaction: Object,
     categories: Array,
     paymentCards: {
+        type: Array,
+        default: () => [],
+    },
+    bankAccounts: {
         type: Array,
         default: () => [],
     },
@@ -35,6 +39,7 @@ const form = useForm({
     payment_selection: initialMethod(),
     payment_method: props.transaction?.payment_method || 'cash',
     payment_card_id: props.transaction?.payment_card_id || null,
+    bank_account_id: props.transaction?.bank_account_id || '',
 });
 
 watch(
@@ -52,6 +57,17 @@ watch(
 );
 
 const submit = () => {
+    if (form.type === 'income') {
+        form.payment_method = null;
+        form.payment_card_id = null;
+        form.payment_selection = 'cash';
+        if (!form.bank_account_id) {
+            form.bank_account_id = null;
+        }
+    } else {
+        form.bank_account_id = null;
+    }
+
     if (isEdit.value) {
         form.put(route('transactions.update', props.transaction.id));
     } else {
@@ -100,7 +116,22 @@ const submit = () => {
                 <InputError class="mt-2" :message="form.errors.category_id" />
             </div>
 
-            <div>
+            <div v-if="form.type === 'income'">
+                <InputLabel value="Conta (opcional)" />
+                <select v-model="form.bank_account_id" class="mt-1 block w-full rounded-md border-slate-300">
+                    <option value="">Sem conta</option>
+                    <option v-for="account in bankAccounts" :key="account.id" :value="account.id">
+                        {{ account.name }}
+                    </option>
+                </select>
+                <InputError class="mt-2" :message="form.errors.bank_account_id" />
+                <p class="mt-1 text-xs text-horizon-500">
+                    Cadastre contas em
+                    <Link :href="route('bank-accounts.index')" class="text-cta hover:underline">Contas</Link>.
+                </p>
+            </div>
+
+            <div v-else>
                 <InputLabel value="Forma de pagamento" />
                 <select v-model="form.payment_selection" class="mt-1 block w-full rounded-md border-slate-300" required>
                     <optgroup label="Geral">
@@ -112,7 +143,7 @@ const submit = () => {
                             :key="card.id"
                             :value="`card:${card.id}`"
                         >
-                            {{ card.name }} •••• {{ card.last_four }}{{ card.user?.name ? ` (${card.user.name})` : '' }}
+                            {{ formatCardLabel(card) }}{{ card.user?.name ? ` (${card.user.name})` : '' }}
                         </option>
                     </optgroup>
                 </select>

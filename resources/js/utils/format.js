@@ -20,8 +20,11 @@ export const PAYMENT_METHODS = [
 
 export function paymentLabel(tx) {
     if (!tx) return '';
+    if (tx.type === 'income') {
+        return tx.bank_account?.name || 'Sem conta';
+    }
     if (tx.payment_method === 'card' && tx.payment_card) {
-        return `${tx.payment_card.name} •••• ${tx.payment_card.last_four}`;
+        return formatCardLabel(tx.payment_card);
     }
     const map = {
         cash: 'Dinheiro',
@@ -30,6 +33,16 @@ export function paymentLabel(tx) {
         card: 'Cartão',
     };
     return map[tx.payment_method] || tx.payment_method || '—';
+}
+
+export function formatCardLabel(card) {
+    if (!card) return '';
+    const typeLabel = card.type === 'debit' ? 'Débito' : 'Crédito';
+    const parts = [card.name, typeLabel];
+    if (card.last_four) {
+        parts.push(`•••• ${card.last_four}`);
+    }
+    return parts.join(' · ');
 }
 
 export const MONTHS = [

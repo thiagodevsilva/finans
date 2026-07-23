@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MemberController;
@@ -12,10 +13,26 @@ use Inertia\Inertia;
 
 Route::get('/', fn () => Inertia::render('Landing'))->name('home');
 
+Route::get('/sitemap.xml', function () {
+    $base = rtrim(config('app.url'), '/');
+    $urls = [
+        ['loc' => $base.'/', 'changefreq' => 'weekly', 'priority' => '1.0'],
+    ];
+
+    $xml = view('sitemap', ['urls' => $urls])->render();
+
+    return response($xml, 200)->header('Content-Type', 'application/xml');
+})->name('sitemap');
+
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
     Route::resource('transactions', TransactionController::class)->except(['show']);
+
+    Route::get('/bank-accounts', [BankAccountController::class, 'index'])->name('bank-accounts.index');
+    Route::post('/bank-accounts', [BankAccountController::class, 'store'])->name('bank-accounts.store');
+    Route::put('/bank-accounts/{bank_account}', [BankAccountController::class, 'update'])->name('bank-accounts.update');
+    Route::delete('/bank-accounts/{bank_account}', [BankAccountController::class, 'destroy'])->name('bank-accounts.destroy');
 
     Route::get('/payment-cards', [PaymentCardController::class, 'index'])->name('payment-cards.index');
     Route::post('/payment-cards', [PaymentCardController::class, 'store'])->name('payment-cards.store');

@@ -24,6 +24,10 @@ class HandleInertiaRequests extends Middleware
 
         return [
             ...parent::share($request),
+            'app' => [
+                'name' => config('app.name', 'Levita'),
+                'url' => rtrim(config('app.url'), '/'),
+            ],
             'auth' => [
                 'user' => $user ? [
                     'id' => $user->id,

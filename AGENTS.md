@@ -21,16 +21,17 @@
 | Dependent | `users.role = dependent` — lança/vê; sem categorias/membros |
 | Category | Categoria da conta |
 | PaymentCard | Cartão de pagamento do membro (`payment_cards`) |
+| BankAccount | Conta bancária opcional (`bank_accounts`) — usada em entradas |
 | Transaction | Entrada (`income`) ou saída (`expense`) |
 
 ## Estrutura
 
 ```
-app/Models/          Account, User, Category, PaymentCard, Transaction
+app/Models/          Account, User, Category, BankAccount, PaymentCard, Transaction
 app/Policies/        RBAC
 app/Http/Controllers/
 resources/views/     Blade shell (`app.blade.php`)
-resources/js/Pages/  Inertia Vue (Landing, Dashboard, Transactions, PaymentCards, Categories, Members, Reports)
+resources/js/Pages/  Inertia Vue (Landing, Dashboard, Transactions, BankAccounts, PaymentCards, Categories, Members, Reports)
 resources/js/Layouts/AppLayout.vue
 database/migrations/
 .cursor/rules/       Convenções persistentes
@@ -41,9 +42,10 @@ database/migrations/
 
 1. **Todo dado de negócio é isolado por `account_id`.** Nunca retornar registros de outra conta.
 2. Preferir trait/scope `BelongsToAccount` + Policies em vez de filtros ad hoc.
-3. Owner gerencia categorias e membros; dependent edita/exclui só as próprias transações e cartões.
+3. Owner gerencia categorias e membros; dependent edita/exclui só as próprias transações, cartões e contas bancárias.
 4. UI em português; valores formatados em BRL.
 5. Identidade visual: amarelo `#ffc107` primário; azul `#2563eb` só em CTAs.
+6. Entradas usam conta bancária opcional; saídas usam forma de pagamento (e cartão quando aplicável).
 
 ## Skills do projeto
 

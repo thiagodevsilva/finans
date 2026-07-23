@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\TransactionRequest;
+use App\Models\BankAccount;
 use App\Models\Category;
 use App\Models\PaymentCard;
 use App\Models\Transaction;
@@ -30,7 +31,8 @@ class TransactionController extends Controller
             ->with([
                 'category:id,name,color',
                 'user:id,name',
-                'paymentCard:id,name,brand,last_four,color',
+                'paymentCard:id,name,brand,type,last_four,color',
+                'bankAccount:id,name,color',
             ])
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->when($type, fn ($q) => $q->where('type', $type))
@@ -60,6 +62,7 @@ class TransactionController extends Controller
             'transaction' => null,
             'categories' => Category::query()->orderBy('name')->get(['id', 'name', 'color']),
             'paymentCards' => $this->paymentCardsForForm(),
+            'bankAccounts' => $this->bankAccountsForForm(),
         ]);
     }
 
@@ -81,9 +84,13 @@ class TransactionController extends Controller
         $this->authorize('update', $transaction);
 
         return Inertia::render('Transactions/Form', [
-            'transaction' => $transaction->load('paymentCard:id,name,brand,last_four,color'),
+            'transaction' => $transaction->load([
+                'paymentCard:id,name,brand,type,last_four,color',
+                'bankAccount:id,name,color',
+            ]),
             'categories' => Category::query()->orderBy('name')->get(['id', 'name', 'color']),
             'paymentCards' => $this->paymentCardsForForm(),
+            'bankAccounts' => $this->bankAccountsForForm(),
         ]);
     }
 
@@ -110,6 +117,13 @@ class TransactionController extends Controller
         return PaymentCard::query()
             ->with('user:id,name')
             ->orderBy('name')
-            ->get(['id', 'name', 'brand', 'last_four', 'color', 'user_id']);
+            ->get(['id', 'name', 'brand', 'type', 'last_four', 'color', 'user_id']);
+    }
+
+    private function bankAccountsForForm()
+    {
+        return BankAccount::query()
+            ->orderBy('name')
+            ->get(['id', 'name', 'color']);
     }
 }

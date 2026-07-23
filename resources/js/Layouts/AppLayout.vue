@@ -12,6 +12,7 @@ const mobileOpen = ref(false);
 const links = [
     { name: 'Dashboard', route: 'dashboard', match: 'dashboard' },
     { name: 'Transações', route: 'transactions.index', match: 'transactions.*' },
+    { name: 'Contas', route: 'bank-accounts.index', match: 'bank-accounts.*' },
     { name: 'Cartões', route: 'payment-cards.index', match: 'payment-cards.*' },
     { name: 'Categorias', route: 'categories.index', match: 'categories.*' },
     { name: 'Dependentes', route: 'members.index', match: 'members.*' },

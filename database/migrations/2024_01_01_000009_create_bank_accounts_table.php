@@ -8,15 +8,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('payment_cards', function (Blueprint $table) {
+        Schema::create('bank_accounts', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('account_id')->constrained('accounts')->cascadeOnDelete();
             $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
             $table->string('name');
-            $table->string('brand'); // visa | mastercard | elo | amex | other
-            $table->string('type')->default('credit'); // credit | debit
-            $table->string('last_four', 4)->nullable();
-            $table->string('color', 7)->default('#ffc107');
+            $table->string('color', 7)->default('#2563eb');
             $table->timestamps();
 
             $table->index('account_id');
@@ -26,6 +23,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('payment_cards');
+        Schema::dropIfExists('bank_accounts');
     }
 };

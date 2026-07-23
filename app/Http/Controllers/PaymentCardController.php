@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\PaymentCardRequest;
+use App\Models\BankAccount;
 use App\Models\PaymentCard;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -17,7 +18,7 @@ class PaymentCardController extends Controller
         $user = auth()->user();
 
         $cards = PaymentCard::query()
-            ->with('user:id,name')
+            ->with(['user:id,name', 'bankAccount:id,name,color'])
             ->orderBy('name')
             ->get()
             ->map(fn (PaymentCard $card) => [
@@ -25,8 +26,12 @@ class PaymentCardController extends Controller
                 'name' => $card->name,
                 'brand' => $card->brand,
                 'brand_label' => PaymentCard::brandLabel($card->brand),
+                'type' => $card->type,
+                'type_label' => PaymentCard::typeLabel($card->type),
                 'last_four' => $card->last_four,
                 'color' => $card->color,
+                'bank_account_id' => $card->bank_account_id,
+                'bank_account' => $card->bankAccount,
                 'user_id' => $card->user_id,
                 'user' => $card->user,
                 'can_edit' => $user->isOwner() || $card->user_id === $user->id,
@@ -34,9 +39,14 @@ class PaymentCardController extends Controller
 
         return Inertia::render('PaymentCards/Index', [
             'cards' => $cards,
+            'bankAccounts' => BankAccount::query()->orderBy('name')->get(['id', 'name', 'color']),
             'brands' => collect(PaymentCard::BRANDS)->map(fn ($brand) => [
                 'value' => $brand,
                 'label' => PaymentCard::brandLabel($brand),
+            ]),
+            'types' => collect(PaymentCard::TYPES)->map(fn ($type) => [
+                'value' => $type,
+                'label' => PaymentCard::typeLabel($type),
             ]),
         ]);
     }

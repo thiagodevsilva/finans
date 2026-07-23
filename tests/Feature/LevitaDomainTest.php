@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Account;
+use App\Models\BankAccount;
 use App\Models\Category;
 use App\Models\PaymentCard;
 use App\Models\Transaction;
@@ -140,6 +141,7 @@ class LevitaDomainTest extends TestCase
             ->post(route('payment-cards.store'), [
                 'name' => 'Meu Nubank',
                 'brand' => 'mastercard',
+                'type' => 'credit',
                 'last_four' => '4321',
                 'color' => '#820ad1',
             ])
@@ -149,7 +151,52 @@ class LevitaDomainTest extends TestCase
             'name' => 'Meu Nubank',
             'user_id' => $dependent->id,
             'account_id' => $account->id,
+            'type' => 'credit',
             'last_four' => '4321',
+        ]);
+    }
+
+    public function test_payment_card_last_four_is_optional(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('payment-cards.store'), [
+                'name' => 'Cartão sem final',
+                'brand' => 'visa',
+                'type' => 'credit',
+                'last_four' => '',
+                'color' => '#ffc107',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('payment_cards', [
+            'name' => 'Cartão sem final',
+            'user_id' => $owner->id,
+            'last_four' => null,
+        ]);
+    }
+
+    public function test_payment_card_requires_debit_or_credit_type(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('payment-cards.store'), [
+                'name' => 'Débito Itaú',
+                'brand' => 'mastercard',
+                'type' => 'debit',
+                'last_four' => '9876',
+                'color' => '#ff6600',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('payment_cards', [
+            'name' => 'Débito Itaú',
+            'type' => 'debit',
+            'last_four' => '9876',
         ]);
     }
 
@@ -164,6 +211,7 @@ class LevitaDomainTest extends TestCase
             'user_id' => $owner->id,
             'name' => 'Cartão do dono',
             'brand' => 'visa',
+            'type' => 'credit',
             'last_four' => '1111',
             'color' => '#ffc107',
         ]);
@@ -172,6 +220,7 @@ class LevitaDomainTest extends TestCase
             ->put(route('payment-cards.update', $ownerCard), [
                 'name' => 'Hack',
                 'brand' => 'visa',
+                'type' => 'credit',
                 'last_four' => '9999',
                 'color' => '#000000',
             ])
@@ -181,6 +230,7 @@ class LevitaDomainTest extends TestCase
             ->put(route('payment-cards.update', $ownerCard), [
                 'name' => 'Cartão atualizado',
                 'brand' => 'visa',
+                'type' => 'credit',
                 'last_four' => '1111',
                 'color' => '#ffc107',
             ])
@@ -198,6 +248,7 @@ class LevitaDomainTest extends TestCase
             'user_id' => $dependent->id,
             'name' => 'Cartão dep',
             'brand' => 'elo',
+            'type' => 'credit',
             'last_four' => '5555',
             'color' => '#00a868',
         ]);
@@ -206,6 +257,7 @@ class LevitaDomainTest extends TestCase
             ->put(route('payment-cards.update', $card), [
                 'name' => 'Ajustado pelo dono',
                 'brand' => 'elo',
+                'type' => 'credit',
                 'last_four' => '5555',
                 'color' => '#00a868',
             ])
@@ -229,6 +281,7 @@ class LevitaDomainTest extends TestCase
             'user_id' => $userB->id,
             'name' => 'Secreto',
             'brand' => 'visa',
+            'type' => 'credit',
             'last_four' => '0000',
             'color' => '#111111',
         ]);
@@ -237,6 +290,7 @@ class LevitaDomainTest extends TestCase
             ->put(route('payment-cards.update', $cardB), [
                 'name' => 'Leak',
                 'brand' => 'visa',
+                'type' => 'credit',
                 'last_four' => '0000',
                 'color' => '#111111',
             ])
@@ -256,6 +310,7 @@ class LevitaDomainTest extends TestCase
             'user_id' => $userB->id,
             'name' => 'Outro',
             'brand' => 'visa',
+            'type' => 'credit',
             'last_four' => '2222',
             'color' => '#222222',
         ]);
@@ -265,6 +320,7 @@ class LevitaDomainTest extends TestCase
             'user_id' => $userA->id,
             'name' => 'Meu',
             'brand' => 'visa',
+            'type' => 'credit',
             'last_four' => '3333',
             'color' => '#333333',
         ]);
@@ -311,6 +367,7 @@ class LevitaDomainTest extends TestCase
             'user_id' => $owner->id,
             'name' => 'Em uso',
             'brand' => 'visa',
+            'type' => 'credit',
             'last_four' => '4444',
             'color' => '#444444',
         ]);
@@ -333,5 +390,107 @@ class LevitaDomainTest extends TestCase
             ->assertSessionHas('error');
 
         $this->assertDatabaseHas('payment_cards', ['id' => $card->id]);
+    }
+
+    public function test_income_can_be_created_without_bank_account_or_payment_method(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_INCOME,
+                'amount' => 1500,
+                'description' => 'Salário',
+                'category_id' => $category->id,
+                'date' => now()->toDateString(),
+            ])
+            ->assertRedirect(route('transactions.index'));
+
+        $this->assertDatabaseHas('transactions', [
+            'description' => 'Salário',
+            'type' => Transaction::TYPE_INCOME,
+            'payment_method' => null,
+            'payment_card_id' => null,
+            'bank_account_id' => null,
+        ]);
+    }
+
+    public function test_income_can_link_optional_bank_account(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+        $bank = BankAccount::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'Nubank',
+            'color' => '#820ad1',
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_INCOME,
+                'amount' => 200,
+                'description' => 'Freelance',
+                'category_id' => $category->id,
+                'date' => now()->toDateString(),
+                'bank_account_id' => $bank->id,
+            ])
+            ->assertRedirect(route('transactions.index'));
+
+        $this->assertDatabaseHas('transactions', [
+            'description' => 'Freelance',
+            'bank_account_id' => $bank->id,
+            'payment_method' => null,
+        ]);
+    }
+
+    public function test_payment_card_can_link_bank_account_optionally(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $bank = BankAccount::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'Itaú',
+            'color' => '#ff6600',
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('payment-cards.store'), [
+                'name' => 'Cartão Itaú',
+                'brand' => 'visa',
+                'type' => 'credit',
+                'last_four' => '',
+                'color' => '#ffc107',
+                'bank_account_id' => $bank->id,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('payment_cards', [
+            'name' => 'Cartão Itaú',
+            'bank_account_id' => $bank->id,
+        ]);
+    }
+
+    public function test_dependent_can_create_bank_account(): void
+    {
+        $account = Account::factory()->create();
+        $dependent = User::factory()->dependent()->create(['account_id' => $account->id]);
+
+        $this->actingAs($dependent)
+            ->post(route('bank-accounts.store'), [
+                'name' => 'Caixinha',
+                'color' => '#2563eb',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('bank_accounts', [
+            'name' => 'Caixinha',
+            'user_id' => $dependent->id,
+            'account_id' => $account->id,
+        ]);
     }
 }

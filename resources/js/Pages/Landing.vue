@@ -6,15 +6,101 @@ import { computed } from 'vue';
 const page = usePage();
 const user = computed(() => page.props.auth?.user);
 const year = new Date().getFullYear();
+const appUrl = computed(() => page.props.app?.url || '');
+const appName = computed(() => page.props.app?.name || 'Levita');
+
+const seoTitle = 'Controle de finanças da família, orçamento e gastos do dia a dia';
+const seoDescription =
+    'Organize as finanças da família de graça: controle de gastos do dia a dia, orçamento compartilhado, categorias, cartões e contas. Mais tranquilidade no mês a dois.';
+const seoKeywords = [
+    'controle financeiro',
+    'finanças pessoais',
+    'finanças da família',
+    'finanças diárias',
+    'controle de gastos',
+    'gastos do dia a dia',
+    'orçamento familiar',
+    'organizar finanças',
+    'app de finanças',
+    'planilha de gastos',
+    'controle financeiro familiar',
+    'acompanhar despesas',
+    'orçamento a dois',
+    'finanças casal',
+    'gestão financeira doméstica',
+].join(', ');
+
+const ogImage = computed(() => `${appUrl.value}/images/og-image.png`);
+const canonical = computed(() => `${appUrl.value}/`);
+const fullTitle = computed(() => `${seoTitle} | ${appName.value}`);
+
+const jsonLd = computed(() =>
+    JSON.stringify({
+        '@context': 'https://schema.org',
+        '@graph': [
+            {
+                '@type': 'WebSite',
+                name: appName.value,
+                url: canonical.value,
+                inLanguage: 'pt-BR',
+                description: seoDescription,
+            },
+            {
+                '@type': 'SoftwareApplication',
+                name: appName.value,
+                applicationCategory: 'FinanceApplication',
+                operatingSystem: 'Web',
+                offers: {
+                    '@type': 'Offer',
+                    price: '0',
+                    priceCurrency: 'BRL',
+                },
+                description: seoDescription,
+                inLanguage: 'pt-BR',
+                url: canonical.value,
+                image: ogImage.value,
+                featureList: [
+                    'Controle de finanças da família',
+                    'Gastos do dia a dia',
+                    'Orçamento compartilhado',
+                    'Categorias e relatórios',
+                    'Cartões e contas bancárias',
+                ],
+            },
+            {
+                '@type': 'Organization',
+                name: appName.value,
+                url: canonical.value,
+                logo: `${appUrl.value}/apple-touch-icon.png`,
+            },
+        ],
+    }),
+);
 </script>
 
 <template>
-    <Head title="Finanças da Família">
-        <meta
-            head-key="description"
-            name="description"
-            content="Organize as finanças da sua família em um só lugar. Conta compartilhada para casais e famílias."
-        />
+    <Head :title="seoTitle">
+        <meta head-key="description" name="description" :content="seoDescription" />
+        <meta head-key="keywords" name="keywords" :content="seoKeywords" />
+        <meta head-key="robots" name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+        <meta head-key="author" name="author" :content="appName" />
+        <link head-key="canonical" rel="canonical" :href="canonical" />
+
+        <meta head-key="og:locale" property="og:locale" content="pt_BR" />
+        <meta head-key="og:type" property="og:type" content="website" />
+        <meta head-key="og:site_name" property="og:site_name" :content="appName" />
+        <meta head-key="og:title" property="og:title" :content="fullTitle" />
+        <meta head-key="og:description" property="og:description" :content="seoDescription" />
+        <meta head-key="og:url" property="og:url" :content="canonical" />
+        <meta head-key="og:image" property="og:image" :content="ogImage" />
+        <meta head-key="og:image:alt" property="og:image:alt" content="Levita — finanças da família em sintonia" />
+
+        <meta head-key="twitter:card" name="twitter:card" content="summary_large_image" />
+        <meta head-key="twitter:title" name="twitter:title" :content="fullTitle" />
+        <meta head-key="twitter:description" name="twitter:description" :content="seoDescription" />
+        <meta head-key="twitter:image" name="twitter:image" :content="ogImage" />
+
+        <script type="application/ld+json">{{ jsonLd }}</script>
     </Head>
 
     <div class="overflow-x-hidden bg-white font-sans text-navy-700 antialiased">
@@ -55,16 +141,16 @@ const year = new Date().getFullYear();
         <section class="overflow-hidden bg-brand-500">
             <div class="mx-auto grid max-w-6xl md:min-h-[520px] md:grid-cols-2">
                 <div class="flex flex-col justify-center px-4 py-14 text-white md:py-16">
-                    <h1 class="text-4xl font-bold leading-tight md:text-5xl">Finanças da família, sem complicação</h1>
+                    <h1 class="text-4xl font-bold leading-tight md:text-5xl">A vida financeira da sua família, em sintonia.</h1>
                     <p class="mt-4 text-lg text-white/90">
-                        O Levita é o espaço compartilhado para você e sua família registrarem entradas, saídas e categorias no mesmo ambiente.
+                        Um jeito simples e gratuito de planejar o mês a dois, acompanhar os gastos da casa e ter mais tranquilidade no orçamento.
                     </p>
-                    <div class="mt-8 flex flex-wrap gap-3">
+                    <div class="mt-8 flex flex-wrap items-center gap-3">
                         <Link
                             :href="route('register')"
                             class="rounded-xl bg-cta px-6 py-3 text-base font-semibold text-white hover:bg-cta-dark"
                         >
-                            Começar grátis
+                            Começar agora (É grátis)
                         </Link>
                         <Link
                             :href="route('login')"
@@ -91,9 +177,9 @@ const year = new Date().getFullYear();
                     <img src="/images/saiba.png" alt="Categorias e gráficos" class="mx-auto max-h-72">
                 </div>
                 <div>
-                    <h2 class="text-3xl font-bold">Saibam juntos para onde vai o dinheiro</h2>
+                    <h2 class="text-3xl font-bold">Chega de se perguntar para onde o dinheiro foi</h2>
                     <p class="mt-4 text-slate-600">
-                        Categorize gastos, acompanhe o mês e veja quem lançou cada movimentação — tudo na mesma conta familiar.
+                        Categorize os gastos da casa, acompanhe a evolução do mês em tempo real e saiba exatamente quem lançou cada despesa — tudo reunido em um só painel.
                     </p>
                 </div>
             </div>
@@ -102,9 +188,9 @@ const year = new Date().getFullYear();
         <section class="border-b border-[#e5e5e5] py-16">
             <div class="mx-auto grid max-w-6xl items-center gap-10 px-4 md:grid-cols-2">
                 <div class="order-2 md:order-1">
-                    <h2 class="text-3xl font-bold">Conta compartilhada de verdade</h2>
+                    <h2 class="text-3xl font-bold">Planejamento financeiro feito a dois (ou em família)</h2>
                     <p class="mt-4 text-slate-600">
-                        O dono da conta convida dependentes (como o cônjuge). Todos visualizam e lançam; só o dono gerencia categorias e membros.
+                        Convide o seu cônjuge ou familiares para somar. Todo mundo participa registrando as compras do dia a dia, enquanto você mantém o controle total das configurações.
                     </p>
                 </div>
                 <div class="order-1 md:order-2">
@@ -119,30 +205,106 @@ const year = new Date().getFullYear();
                 <div class="mt-12 grid gap-10 md:grid-cols-3">
                     <div>
                         <img src="/images/facil.png" alt="" class="mx-auto h-20">
-                        <h3 class="mt-4 text-xl font-semibold">Fácil</h3>
-                        <p class="mt-2 text-slate-600">Interface limpa em português, pensada para o dia a dia da família.</p>
+                        <h3 class="mt-4 text-xl font-semibold">Simples de usar</h3>
+                        <p class="mt-2 text-slate-600">Interface limpa, intuitiva e em português. Sem planilhas confusas ou funções desnecessárias.</p>
                     </div>
                     <div>
                         <img src="/images/economize.png" alt="" class="mx-auto h-20">
-                        <h3 class="mt-4 text-xl font-semibold">Organizado</h3>
-                        <p class="mt-2 text-slate-600">Dashboard, filtros por mês e relatórios com gráficos.</p>
+                        <h3 class="mt-4 text-xl font-semibold">Visão clara do mês</h3>
+                        <p class="mt-2 text-slate-600">Gráficos práticos e relatórios diretos para você entender para onde o orçamento está indo com um olhar.</p>
                     </div>
                     <div>
                         <img src="/images/suporte.png" alt="" class="mx-auto h-20">
-                        <h3 class="mt-4 text-xl font-semibold">Compartilhado</h3>
-                        <p class="mt-2 text-slate-600">Owner e dependentes no mesmo ambiente, com permissões claras.</p>
+                        <h3 class="mt-4 text-xl font-semibold">Feito para colaborar</h3>
+                        <p class="mt-2 text-slate-600">Acesso simultâneo para quem mora com você, com permissões claras e seguras para cada perfil.</p>
                     </div>
                 </div>
             </div>
         </section>
 
-        <footer class="bg-slate-900 py-10 text-slate-300">
-            <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 md:flex-row">
-                <p class="flex items-center gap-2 font-semibold text-white">
-                    <AppMark :size="28" />
-                    Levita
-                </p>
-                <p class="text-sm">Finanças da família · {{ year }}</p>
+        <section class="bg-brand-500">
+            <div class="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 px-4 py-14 md:flex-row md:items-center">
+                <div class="max-w-xl text-white">
+                    <h2 class="text-2xl font-bold leading-tight md:text-3xl">
+                        Menos dúvida no fim do mês. Mais paz no dia a dia.
+                    </h2>
+                    <p class="mt-3 text-base text-white/90 md:text-lg">
+                        Comece grátis e traga quem divide a casa com você. Em poucos minutos o orçamento da família ganha clareza.
+                    </p>
+                </div>
+                <div class="flex flex-wrap gap-3">
+                    <Link
+                        v-if="user"
+                        :href="route('dashboard')"
+                        class="rounded-xl bg-cta px-6 py-3 text-base font-semibold text-white hover:bg-cta-dark"
+                    >
+                        Ir ao app
+                    </Link>
+                    <template v-else>
+                        <Link
+                            :href="route('register')"
+                            class="rounded-xl bg-cta px-6 py-3 text-base font-semibold text-white hover:bg-cta-dark"
+                        >
+                            Começar agora (É grátis)
+                        </Link>
+                        <Link
+                            :href="route('login')"
+                            class="rounded-xl border border-white px-6 py-3 text-base font-semibold text-white hover:bg-white/10"
+                        >
+                            Já tenho conta
+                        </Link>
+                    </template>
+                </div>
+            </div>
+        </section>
+
+        <footer class="bg-navy-900 text-horizon-300">
+            <div class="mx-auto grid max-w-6xl gap-10 px-4 py-12 md:grid-cols-[1.4fr_1fr_1fr]">
+                <div>
+                    <Link :href="route('home')" class="inline-flex items-center gap-2.5">
+                        <AppMark :size="36" />
+                        <span class="text-xl font-bold tracking-tight text-white">Levita</span>
+                    </Link>
+                    <p class="mt-4 max-w-sm text-sm leading-relaxed text-horizon-400">
+                        O jeito simples de cuidar das finanças da família: gastos do dia a dia, orçamento compartilhado e tranquilidade no mês — sem planilha bagunçada.
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-white">Produto</p>
+                    <ul class="mt-4 space-y-2 text-sm">
+                        <li>
+                            <Link :href="route('home')" class="hover:text-brand-400">Início</Link>
+                        </li>
+                        <li v-if="user">
+                            <Link :href="route('dashboard')" class="hover:text-brand-400">Abrir o app</Link>
+                        </li>
+                        <template v-else>
+                            <li>
+                                <Link :href="route('register')" class="hover:text-brand-400">Criar conta grátis</Link>
+                            </li>
+                            <li>
+                                <Link :href="route('login')" class="hover:text-brand-400">Entrar</Link>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-white">Para quem é</p>
+                    <ul class="mt-4 space-y-2 text-sm text-horizon-400">
+                        <li>Casais que dividem as contas</li>
+                        <li>Famílias no dia a dia</li>
+                        <li>Quem quer paz no orçamento</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="border-t border-white/10">
+                <div class="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-sm text-horizon-500 md:flex-row md:items-center md:justify-between">
+                    <p>© {{ year }} Levita. Feito para a vida financeira em sintonia.</p>
+                    <p>Controle de gastos · Orçamento familiar · Grátis para começar</p>
+                </div>
             </div>
         </footer>
     </div>

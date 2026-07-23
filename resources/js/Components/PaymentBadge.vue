@@ -10,7 +10,12 @@ const props = defineProps({
 });
 
 const label = computed(() => paymentLabel(props.transaction));
-const color = computed(() => props.transaction.payment_card?.color || null);
+const color = computed(() => {
+    if (props.transaction.type === 'income') {
+        return props.transaction.bank_account?.color || null;
+    }
+    return props.transaction.payment_card?.color || null;
+});
 </script>
 
 <template>

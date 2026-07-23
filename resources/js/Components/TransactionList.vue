@@ -72,7 +72,7 @@ const emit = defineEmits(['destroy']);
                     <th class="px-5 py-4 font-medium">Data</th>
                     <th class="px-5 py-4 font-medium">Descrição</th>
                     <th class="px-5 py-4 font-medium">Categoria</th>
-                    <th class="px-5 py-4 font-medium">Pagamento</th>
+                    <th class="px-5 py-4 font-medium">Pagamento / Conta</th>
                     <th class="px-5 py-4 font-medium">Quem</th>
                     <th class="px-5 py-4 font-medium text-right">Valor</th>
                     <th v-if="showActions" class="px-5 py-4 font-medium" />

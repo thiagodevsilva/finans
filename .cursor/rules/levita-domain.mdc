@@ -7,7 +7,7 @@ alwaysApply: true
 
 ## Isolamento
 
-- Toda query de Category, Transaction, PaymentCard e listagem de User (membros) deve filtrar por `account_id` do usuário autenticado.
+- Toda query de Category, Transaction, PaymentCard, BankAccount e listagem de User (membros) deve filtrar por `account_id` do usuário autenticado.
 - Use o trait `BelongsToAccount` / global scope. Nunca confie só no ID da URL.
 
 ## Papéis
@@ -23,6 +23,10 @@ alwaysApply: true
 | Criar cartão | sim | sim |
 | Editar/excluir qualquer cartão | sim | não |
 | Editar/excluir próprio cartão | sim | sim |
+| Ver contas bancárias | sim | sim |
+| Criar conta bancária | sim | sim |
+| Editar/excluir qualquer conta bancária | sim | não |
+| Editar/excluir própria conta bancária | sim | sim |
 | Adicionar/remover dependentes | sim | não |
 
 ## Conta

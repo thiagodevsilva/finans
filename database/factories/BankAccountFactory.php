@@ -3,16 +3,16 @@
 namespace Database\Factories;
 
 use App\Models\Account;
-use App\Models\PaymentCard;
+use App\Models\BankAccount;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\PaymentCard>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\BankAccount>
  */
-class PaymentCardFactory extends Factory
+class BankAccountFactory extends Factory
 {
-    protected $model = PaymentCard::class;
+    protected $model = BankAccount::class;
 
     public function definition(): array
     {
@@ -20,9 +20,6 @@ class PaymentCardFactory extends Factory
             'account_id' => Account::factory(),
             'user_id' => User::factory(),
             'name' => fake()->words(2, true),
-            'brand' => fake()->randomElement(PaymentCard::BRANDS),
-            'type' => fake()->randomElement(PaymentCard::TYPES),
-            'last_four' => (string) fake()->numerify('####'),
             'color' => fake()->hexColor(),
         ];
     }

@@ -1,0 +1,28 @@
+{
+  "name": "Levita",
+  "short_name": "Levita",
+  "description": "Controle de finanças da família, gastos do dia a dia e orçamento compartilhado.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffc107",
+  "theme_color": "#ffc107",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/favicon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

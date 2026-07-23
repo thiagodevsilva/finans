@@ -28,7 +28,8 @@ class DashboardController extends Controller
             ->with([
                 'category:id,name,color',
                 'user:id,name',
-                'paymentCard:id,name,brand,last_four,color',
+                'paymentCard:id,name,brand,type,last_four,color',
+                'bankAccount:id,name,color',
             ])
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->orderByDesc('date')

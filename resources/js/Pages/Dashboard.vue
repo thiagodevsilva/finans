@@ -52,15 +52,38 @@ const applyFilters = (event) => {
             </div>
         </div>
 
-        <div class="mb-4 grid grid-cols-3 gap-2 sm:mb-8 sm:gap-4">
+        <!-- Mobile: resumo legível em uma faixa -->
+        <div class="mb-4 rounded-[16px] bg-white px-4 py-3 shadow-soft sm:hidden">
+            <div class="flex items-center justify-between gap-3 border-b border-horizon-100 pb-2.5">
+                <span class="text-sm font-medium text-horizon-500">Saldo</span>
+                <span
+                    class="text-base font-bold tabular-nums"
+                    :class="summary.balance >= 0 ? 'text-emerald-600' : 'text-red-600'"
+                >
+                    {{ formatBRL(summary.balance) }}
+                </span>
+            </div>
+            <div class="mt-2.5 grid grid-cols-2 gap-3">
+                <div>
+                    <p class="text-xs font-medium text-horizon-500">Entradas</p>
+                    <p class="text-sm font-bold tabular-nums text-emerald-600">{{ formatBRL(summary.income) }}</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-xs font-medium text-horizon-500">Saídas</p>
+                    <p class="text-sm font-bold tabular-nums text-red-600">{{ formatBRL(summary.expense) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Desktop: widgets -->
+        <div class="mb-8 hidden gap-4 sm:grid sm:grid-cols-3">
             <StatWidget
-                compact
-                title="Saldo"
+                title="Saldo do mês"
                 :value="formatBRL(summary.balance)"
                 :tone="summary.balance >= 0 ? 'positive' : 'negative'"
             />
-            <StatWidget compact title="Entradas" :value="formatBRL(summary.income)" tone="positive" />
-            <StatWidget compact title="Saídas" :value="formatBRL(summary.expense)" tone="negative" />
+            <StatWidget title="Entradas" :value="formatBRL(summary.income)" tone="positive" />
+            <StatWidget title="Saídas" :value="formatBRL(summary.expense)" tone="negative" />
         </div>
 
         <h2 class="mb-2 text-base font-bold text-navy-700 sm:mb-3 sm:text-lg">Últimas transações</h2>

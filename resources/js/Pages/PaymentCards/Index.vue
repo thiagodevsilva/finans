@@ -10,6 +10,11 @@ import { computed, ref } from 'vue';
 const props = defineProps({
     cards: Array,
     brands: Array,
+    types: Array,
+    bankAccounts: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const page = usePage();
@@ -20,16 +25,20 @@ const editing = ref(null);
 const form = useForm({
     name: '',
     brand: 'visa',
+    type: 'credit',
     last_four: '',
     color: '#ffc107',
+    bank_account_id: '',
 });
 
 const startEdit = (card) => {
     editing.value = card.id;
     form.name = card.name;
     form.brand = card.brand;
-    form.last_four = card.last_four;
+    form.type = card.type || 'credit';
+    form.last_four = card.last_four || '';
     form.color = card.color;
+    form.bank_account_id = card.bank_account_id || '';
     form.clearErrors();
 };
 
@@ -37,10 +46,16 @@ const cancelEdit = () => {
     editing.value = null;
     form.reset();
     form.brand = 'visa';
+    form.type = 'credit';
     form.color = '#ffc107';
+    form.bank_account_id = '';
 };
 
 const submit = () => {
+    if (!form.bank_account_id) {
+        form.bank_account_id = null;
+    }
+
     if (editing.value) {
         form.put(route('payment-cards.update', editing.value), {
             onSuccess: () => cancelEdit(),
@@ -50,7 +65,9 @@ const submit = () => {
             onSuccess: () => {
                 form.reset();
                 form.brand = 'visa';
+                form.type = 'credit';
                 form.color = '#ffc107';
+                form.bank_account_id = '';
             },
         });
     }
@@ -72,13 +89,20 @@ const destroy = (card) => {
         </div>
 
         <form
-            class="mb-8 grid max-w-3xl gap-3 rounded-[20px] bg-white p-5 shadow-soft sm:grid-cols-2 lg:grid-cols-5"
+            class="mb-8 grid max-w-4xl gap-3 rounded-[20px] bg-white p-5 shadow-soft sm:grid-cols-2 lg:grid-cols-3"
             @submit.prevent="submit"
         >
             <div class="lg:col-span-2">
                 <InputLabel value="Apelido" />
                 <TextInput class="mt-1 block w-full" v-model="form.name" placeholder="Ex.: Nubank Roxinho" required />
                 <InputError class="mt-1" :message="form.errors.name" />
+            </div>
+            <div>
+                <InputLabel value="Tipo" />
+                <select v-model="form.type" class="mt-1 block w-full rounded-xl border-horizon-200 text-sm text-navy-700" required>
+                    <option v-for="t in types" :key="t.value" :value="t.value">{{ t.label }}</option>
+                </select>
+                <InputError class="mt-1" :message="form.errors.type" />
             </div>
             <div>
                 <InputLabel value="Bandeira" />
@@ -88,23 +112,32 @@ const destroy = (card) => {
                 <InputError class="mt-1" :message="form.errors.brand" />
             </div>
             <div>
-                <InputLabel value="Final" />
+                <InputLabel value="Final (opcional)" />
                 <TextInput
                     class="mt-1 block w-full"
                     v-model="form.last_four"
                     maxlength="4"
-                    pattern="[0-9]{4}"
+                    inputmode="numeric"
                     placeholder="1234"
-                    required
                 />
                 <InputError class="mt-1" :message="form.errors.last_four" />
+            </div>
+            <div>
+                <InputLabel value="Conta (opcional)" />
+                <select v-model="form.bank_account_id" class="mt-1 block w-full rounded-xl border-horizon-200 text-sm text-navy-700">
+                    <option value="">Sem conta</option>
+                    <option v-for="account in bankAccounts" :key="account.id" :value="account.id">
+                        {{ account.name }}
+                    </option>
+                </select>
+                <InputError class="mt-1" :message="form.errors.bank_account_id" />
             </div>
             <div>
                 <InputLabel value="Cor" />
                 <input type="color" v-model="form.color" class="mt-1 h-10 w-full cursor-pointer rounded-xl border border-horizon-200" />
                 <InputError class="mt-1" :message="form.errors.color" />
             </div>
-            <div class="flex items-end gap-2 sm:col-span-2 lg:col-span-5">
+            <div class="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
                 <PrimaryButton :disabled="form.processing">{{ editing ? 'Salvar' : 'Adicionar cartão' }}</PrimaryButton>
                 <button v-if="editing" type="button" class="text-sm text-horizon-600 underline" @click="cancelEdit">Cancelar</button>
             </div>
@@ -123,7 +156,9 @@ const destroy = (card) => {
             >
                 <div class="flex items-start justify-between gap-2">
                     <div>
-                        <p class="text-xs font-medium uppercase tracking-wide text-white/80">{{ card.brand_label }}</p>
+                        <p class="text-xs font-medium uppercase tracking-wide text-white/80">
+                            {{ card.brand_label }} · {{ card.type_label }}
+                        </p>
                         <h2 class="mt-1 text-lg font-bold">{{ card.name }}</h2>
                     </div>
                     <span
@@ -134,7 +169,13 @@ const destroy = (card) => {
                     </span>
                 </div>
 
-                <p class="mt-8 font-mono text-xl tracking-[0.2em]">•••• {{ card.last_four }}</p>
+                <p class="mt-8 font-mono text-xl tracking-[0.2em]">
+                    <template v-if="card.last_four">•••• {{ card.last_four }}</template>
+                    <template v-else>{{ card.type_label }}</template>
+                </p>
+                <p v-if="card.bank_account" class="mt-2 text-sm text-white/80">
+                    Conta: {{ card.bank_account.name }}
+                </p>
 
                 <div v-if="card.can_edit" class="mt-5 flex gap-3 text-sm">
                     <button type="button" class="font-medium text-white/90 underline hover:text-white" @click="startEdit(card)">

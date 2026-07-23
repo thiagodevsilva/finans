@@ -17,7 +17,9 @@ class TransactionRequest extends FormRequest
     public function rules(): array
     {
         $accountId = $this->user()->account_id;
-        $isCard = $this->input('payment_method') === Transaction::PAYMENT_CARD;
+        $isIncome = $this->input('type') === Transaction::TYPE_INCOME;
+        $isExpense = $this->input('type') === Transaction::TYPE_EXPENSE;
+        $isCard = $isExpense && $this->input('payment_method') === Transaction::PAYMENT_CARD;
 
         return [
             'type' => ['required', Rule::in([Transaction::TYPE_INCOME, Transaction::TYPE_EXPENSE])],
@@ -29,12 +31,21 @@ class TransactionRequest extends FormRequest
                 Rule::exists('categories', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
             ],
             'date' => ['required', 'date'],
-            'payment_method' => ['required', Rule::in(Transaction::PAYMENT_METHODS)],
+            'payment_method' => [
+                Rule::requiredIf($isExpense),
+                'nullable',
+                Rule::in(Transaction::PAYMENT_METHODS),
+            ],
             'payment_card_id' => [
                 Rule::requiredIf($isCard),
                 'nullable',
                 'uuid',
                 Rule::exists('payment_cards', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
+            ],
+            'bank_account_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('bank_accounts', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
             ],
         ];
     }
@@ -42,7 +53,14 @@ class TransactionRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
-            if ($this->input('payment_method') !== Transaction::PAYMENT_CARD && $this->filled('payment_card_id')) {
+            if ($this->input('type') !== Transaction::TYPE_EXPENSE) {
+                return;
+            }
+
+            if (
+                $this->input('payment_method') !== Transaction::PAYMENT_CARD
+                && $this->filled('payment_card_id')
+            ) {
                 $validator->errors()->add('payment_card_id', 'Cartão só pode ser informado quando a forma for cartão.');
             }
         });
@@ -50,9 +68,22 @@ class TransactionRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        if ($this->input('payment_method') !== Transaction::PAYMENT_CARD) {
-            $this->merge(['payment_card_id' => null]);
+        if ($this->input('type') === Transaction::TYPE_INCOME) {
+            $this->merge([
+                'payment_method' => null,
+                'payment_card_id' => null,
+                'bank_account_id' => $this->filled('bank_account_id') ? $this->input('bank_account_id') : null,
+            ]);
+
+            return;
         }
+
+        $this->merge([
+            'bank_account_id' => null,
+            'payment_card_id' => $this->input('payment_method') === Transaction::PAYMENT_CARD
+                ? $this->input('payment_card_id')
+                : null,
+        ]);
     }
 
     public function attributes(): array
@@ -65,6 +96,7 @@ class TransactionRequest extends FormRequest
             'date' => 'data',
             'payment_method' => 'forma de pagamento',
             'payment_card_id' => 'cartão',
+            'bank_account_id' => 'conta',
         ];
     }
 }
