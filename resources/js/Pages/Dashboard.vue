@@ -12,6 +12,10 @@ const props = defineProps({
     summary: Object,
     filters: Object,
     recentTransactions: Array,
+    upcomingBills: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const years = computed(() => {
@@ -93,5 +97,27 @@ const applyFilters = (event) => {
                 empty-message="Nenhuma transação neste mês."
             />
         </Card>
+
+        <div v-if="upcomingBills.length" class="mt-8">
+            <div class="mb-2 flex items-center justify-between">
+                <h2 class="text-base font-bold text-navy-700 sm:text-lg">Contas fixas a pagar</h2>
+                <Link :href="route('recurring-bills.index')" class="text-sm font-medium text-cta hover:underline">Ver todas</Link>
+            </div>
+            <Card>
+                <ul class="divide-y divide-horizon-100">
+                    <li
+                        v-for="bill in upcomingBills"
+                        :key="bill.id"
+                        class="flex items-center justify-between py-3 text-sm first:pt-0 last:pb-0"
+                    >
+                        <div>
+                            <p class="font-medium text-navy-700">{{ bill.description }}</p>
+                            <p class="text-xs text-horizon-500">{{ bill.category?.name }}</p>
+                        </div>
+                        <p class="font-bold text-navy-700">{{ formatBRL(bill.amount) }}</p>
+                    </li>
+                </ul>
+            </Card>
+        </div>
     </AppLayout>
 </template>

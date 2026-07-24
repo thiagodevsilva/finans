@@ -40,20 +40,40 @@ const emit = defineEmits(['destroy']);
                 </div>
                 <p
                     class="shrink-0 text-sm font-bold"
-                    :class="tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'"
+                    :class="{
+                        'text-emerald-600': tx.type === 'income',
+                        'text-red-600': tx.type === 'expense',
+                        'text-horizon-600': tx.type === 'transfer',
+                    }"
                 >
-                    {{ tx.type === 'income' ? '+' : '-' }}{{ formatBRL(tx.amount) }}
+                    <template v-if="tx.type === 'income'">+</template>
+                    <template v-else-if="tx.type === 'expense'">-</template>
+                    <template v-else></template>
+                    {{ formatBRL(tx.amount) }}
                 </p>
             </div>
             <div class="mt-3 flex flex-wrap items-center gap-2">
-                <span class="inline-flex items-center gap-1.5 text-xs text-navy-700">
+                <span v-if="tx.category" class="inline-flex items-center gap-1.5 text-xs text-navy-700">
                     <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: tx.category?.color }" />
                     {{ tx.category?.name }}
                 </span>
+                <span v-else class="text-xs text-horizon-500">Sem categoria</span>
                 <PaymentBadge :transaction="tx" />
+                <Link
+                    v-if="tx.installment_plan_id"
+                    :href="route('installment-plans.show', tx.installment_plan_id)"
+                    class="text-xs font-medium text-cta hover:underline"
+                >
+                    Ver compra
+                </Link>
             </div>
-            <div v-if="showActions && canEdit(tx)" class="mt-3 flex gap-4 border-t border-horizon-100 pt-3 text-sm">
+            <div v-if="showActions && canEdit(tx) && tx.type !== 'transfer'" class="mt-3 flex gap-4 border-t border-horizon-100 pt-3 text-sm">
                 <Link :href="route('transactions.edit', tx.id)" class="font-medium text-cta hover:underline">Editar</Link>
+                <button type="button" class="font-medium text-red-600 hover:underline" @click="emit('destroy', tx)">
+                    Excluir
+                </button>
+            </div>
+            <div v-else-if="showActions && canEdit(tx)" class="mt-3 flex gap-4 border-t border-horizon-100 pt-3 text-sm">
                 <button type="button" class="font-medium text-red-600 hover:underline" @click="emit('destroy', tx)">
                     Excluir
                 </button>
@@ -81,12 +101,22 @@ const emit = defineEmits(['destroy']);
             <tbody class="divide-y divide-horizon-100">
                 <tr v-for="tx in transactions" :key="tx.id">
                     <td class="whitespace-nowrap px-5 py-3 text-navy-700">{{ formatDate(tx.date) }}</td>
-                    <td class="px-5 py-3 text-navy-700">{{ tx.description }}</td>
+                    <td class="px-5 py-3 text-navy-700">
+                        <div>{{ tx.description }}</div>
+                        <Link
+                            v-if="tx.installment_plan_id"
+                            :href="route('installment-plans.show', tx.installment_plan_id)"
+                            class="text-xs font-medium text-cta hover:underline"
+                        >
+                            Ver compra
+                        </Link>
+                    </td>
                     <td class="px-5 py-3">
-                        <span class="inline-flex items-center gap-2 text-navy-700">
+                        <span v-if="tx.category" class="inline-flex items-center gap-2 text-navy-700">
                             <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: tx.category?.color }" />
                             {{ tx.category?.name }}
                         </span>
+                        <span v-else class="text-horizon-500">—</span>
                     </td>
                     <td class="px-5 py-3">
                         <PaymentBadge :transaction="tx" />
@@ -94,13 +124,25 @@ const emit = defineEmits(['destroy']);
                     <td class="px-5 py-3 text-horizon-600">{{ tx.user?.name }}</td>
                     <td
                         class="px-5 py-3 text-right font-bold"
-                        :class="tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'"
+                        :class="{
+                            'text-emerald-600': tx.type === 'income',
+                            'text-red-600': tx.type === 'expense',
+                            'text-horizon-600': tx.type === 'transfer',
+                        }"
                     >
-                        {{ tx.type === 'income' ? '+' : '-' }}{{ formatBRL(tx.amount) }}
+                        <template v-if="tx.type === 'income'">+</template>
+                        <template v-else-if="tx.type === 'expense'">-</template>
+                        {{ formatBRL(tx.amount) }}
                     </td>
                     <td v-if="showActions" class="whitespace-nowrap px-5 py-3 text-right">
                         <template v-if="canEdit(tx)">
-                            <Link :href="route('transactions.edit', tx.id)" class="text-cta hover:underline">Editar</Link>
+                            <Link
+                                v-if="tx.type !== 'transfer'"
+                                :href="route('transactions.edit', tx.id)"
+                                class="text-cta hover:underline"
+                            >
+                                Editar
+                            </Link>
                             <button type="button" class="ms-3 text-red-600 hover:underline" @click="emit('destroy', tx)">
                                 Excluir
                             </button>

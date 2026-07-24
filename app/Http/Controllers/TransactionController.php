@@ -7,6 +7,7 @@ use App\Models\BankAccount;
 use App\Models\Category;
 use App\Models\PaymentCard;
 use App\Models\Transaction;
+use App\Services\CreditCardInvoiceService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,6 +16,10 @@ use Inertia\Response;
 
 class TransactionController extends Controller
 {
+    public function __construct(
+        private readonly CreditCardInvoiceService $invoiceService
+    ) {}
+
     public function index(Request $request): Response
     {
         $this->authorize('viewAny', Transaction::class);
@@ -33,8 +38,13 @@ class TransactionController extends Controller
                 'user:id,name',
                 'paymentCard:id,name,brand,type,last_four,color',
                 'bankAccount:id,name,color',
+                'installmentPlan:id,description,total_amount,installments_count',
             ])
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->where(function ($q) {
+                $q->where('status', Transaction::STATUS_CONFIRMED)
+                    ->orWhereNull('status');
+            })
             ->when($type, fn ($q) => $q->where('type', $type))
             ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
             ->orderByDesc('date')
@@ -70,8 +80,12 @@ class TransactionController extends Controller
     {
         $this->authorize('create', Transaction::class);
 
+        $data = $request->validated();
+        $data['status'] = Transaction::STATUS_CONFIRMED;
+        $data['credit_card_invoice_id'] = $this->resolveInvoiceId($data);
+
         Transaction::create([
-            ...$request->validated(),
+            ...$data,
             'user_id' => $request->user()->id,
             'account_id' => $request->user()->account_id,
         ]);
@@ -82,6 +96,11 @@ class TransactionController extends Controller
     public function edit(Transaction $transaction): Response
     {
         $this->authorize('update', $transaction);
+
+        if ($transaction->type === Transaction::TYPE_TRANSFER) {
+            return redirect()->route('transactions.index')
+                ->with('error', 'Pagamentos de fatura não podem ser editados por este formulário.');
+        }
 
         return Inertia::render('Transactions/Form', [
             'transaction' => $transaction->load([
@@ -98,7 +117,15 @@ class TransactionController extends Controller
     {
         $this->authorize('update', $transaction);
 
-        $transaction->update($request->validated());
+        if ($transaction->type === Transaction::TYPE_TRANSFER) {
+            return redirect()->route('transactions.index')
+                ->with('error', 'Pagamentos de fatura não podem ser editados por este formulário.');
+        }
+
+        $data = $request->validated();
+        $data['credit_card_invoice_id'] = $this->resolveInvoiceId($data);
+
+        $transaction->update($data);
 
         return redirect()->route('transactions.index')->with('success', 'Transação atualizada com sucesso.');
     }
@@ -112,12 +139,31 @@ class TransactionController extends Controller
         return redirect()->route('transactions.index')->with('success', 'Transação excluída com sucesso.');
     }
 
+    private function resolveInvoiceId(array $data): ?string
+    {
+        if (
+            ($data['type'] ?? null) !== Transaction::TYPE_EXPENSE
+            || ($data['payment_method'] ?? null) !== Transaction::PAYMENT_CARD
+            || empty($data['payment_card_id'])
+        ) {
+            return null;
+        }
+
+        $card = PaymentCard::query()->find($data['payment_card_id']);
+
+        if (! $card || $card->type !== PaymentCard::TYPE_CREDIT) {
+            return null;
+        }
+
+        return $this->invoiceService->resolveForPurchase($card, $data['date'])->id;
+    }
+
     private function paymentCardsForForm()
     {
         return PaymentCard::query()
             ->with('user:id,name')
             ->orderBy('name')
-            ->get(['id', 'name', 'brand', 'type', 'last_four', 'color', 'user_id']);
+            ->get(['id', 'name', 'brand', 'type', 'last_four', 'color', 'user_id', 'closing_day', 'due_day']);
     }
 
     private function bankAccountsForForm()

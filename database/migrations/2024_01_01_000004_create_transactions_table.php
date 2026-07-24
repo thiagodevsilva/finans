@@ -12,8 +12,8 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('account_id')->constrained('accounts')->cascadeOnDelete();
             $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
-            $table->foreignUuid('category_id')->constrained('categories')->restrictOnDelete();
-            $table->string('type'); // income | expense
+            $table->foreignUuid('category_id')->nullable()->constrained('categories')->nullOnDelete();
+            $table->string('type'); // income | expense | transfer
             $table->decimal('amount', 12, 2);
             $table->string('description');
             $table->date('date');

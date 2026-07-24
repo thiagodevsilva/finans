@@ -19,7 +19,8 @@ class DashboardController extends Controller
         $end = (clone $start)->endOfMonth();
 
         $base = Transaction::query()
-            ->whereBetween('date', [$start->toDateString(), $end->toDateString()]);
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->where('status', Transaction::STATUS_CONFIRMED);
 
         $income = (clone $base)->where('type', Transaction::TYPE_INCOME)->sum('amount');
         $expense = (clone $base)->where('type', Transaction::TYPE_EXPENSE)->sum('amount');
@@ -32,9 +33,19 @@ class DashboardController extends Controller
                 'bankAccount:id,name,color',
             ])
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->where('status', Transaction::STATUS_CONFIRMED)
             ->orderByDesc('date')
             ->orderByDesc('created_at')
             ->limit(10)
+            ->get();
+
+        $upcomingBills = Transaction::query()
+            ->with(['category:id,name,color'])
+            ->where('status', Transaction::STATUS_PLANNED)
+            ->whereNotNull('recurring_bill_id')
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->orderBy('date')
+            ->limit(8)
             ->get();
 
         return Inertia::render('Dashboard', [
@@ -48,6 +59,7 @@ class DashboardController extends Controller
                 'year' => $year,
             ],
             'recentTransactions' => $recent,
+            'upcomingBills' => $upcomingBills,
         ]);
     }
 }

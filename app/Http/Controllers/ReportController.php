@@ -23,6 +23,7 @@ class ReportController extends Controller
             ->select('category_id', DB::raw('SUM(amount) as total'))
             ->with('category:id,name,color')
             ->where('type', Transaction::TYPE_EXPENSE)
+            ->where('status', Transaction::STATUS_CONFIRMED)
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->groupBy('category_id')
             ->get()
@@ -40,11 +41,13 @@ class ReportController extends Controller
 
             $income = Transaction::query()
                 ->where('type', Transaction::TYPE_INCOME)
+                ->where('status', Transaction::STATUS_CONFIRMED)
                 ->whereBetween('date', [$pStart->toDateString(), $pEnd->toDateString()])
                 ->sum('amount');
 
             $expense = Transaction::query()
                 ->where('type', Transaction::TYPE_EXPENSE)
+                ->where('status', Transaction::STATUS_CONFIRMED)
                 ->whereBetween('date', [$pStart->toDateString(), $pEnd->toDateString()])
                 ->sum('amount');
 

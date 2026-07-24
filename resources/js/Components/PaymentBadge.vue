@@ -11,8 +11,8 @@ const props = defineProps({
 
 const label = computed(() => paymentLabel(props.transaction));
 const color = computed(() => {
-    if (props.transaction.type === 'income') {
-        return props.transaction.bank_account?.color || null;
+    if (props.transaction.type === 'income' || props.transaction.type === 'transfer') {
+        return props.transaction.bank_account?.color || props.transaction.payment_card?.color || null;
     }
     return props.transaction.payment_card?.color || null;
 });

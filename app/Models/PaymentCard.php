@@ -49,6 +49,8 @@ class PaymentCard extends Model
         'type',
         'last_four',
         'color',
+        'closing_day',
+        'due_day',
     ];
 
     public function account(): BelongsTo
@@ -69,6 +71,11 @@ class PaymentCard extends Model
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class, 'payment_card_id');
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(CreditCardInvoice::class, 'payment_card_id');
     }
 
     public static function brandLabel(string $brand): string

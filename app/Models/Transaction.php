@@ -16,6 +16,16 @@ class Transaction extends Model
 
     public const TYPE_EXPENSE = 'expense';
 
+    public const TYPE_TRANSFER = 'transfer';
+
+    public const STATUS_PLANNED = 'planned';
+
+    public const STATUS_CONFIRMED = 'confirmed';
+
+    public const STATUS_SKIPPED = 'skipped';
+
+    public const STATUS_CANCELLED = 'cancelled';
+
     public const PAYMENT_CASH = 'cash';
 
     public const PAYMENT_PIX = 'pix';
@@ -42,6 +52,11 @@ class Transaction extends Model
         'payment_method',
         'payment_card_id',
         'bank_account_id',
+        'credit_card_invoice_id',
+        'installment_plan_id',
+        'installment_number',
+        'recurring_bill_id',
+        'status',
     ];
 
     protected $casts = [
@@ -74,9 +89,34 @@ class Transaction extends Model
         return $this->belongsTo(BankAccount::class, 'bank_account_id');
     }
 
+    public function creditCardInvoice(): BelongsTo
+    {
+        return $this->belongsTo(CreditCardInvoice::class, 'credit_card_invoice_id');
+    }
+
+    public function installmentPlan(): BelongsTo
+    {
+        return $this->belongsTo(InstallmentPlan::class, 'installment_plan_id');
+    }
+
+    public function recurringBill(): BelongsTo
+    {
+        return $this->belongsTo(RecurringBill::class, 'recurring_bill_id');
+    }
+
     public function isIncome(): bool
     {
         return $this->type === self::TYPE_INCOME;
+    }
+
+    public function isTransfer(): bool
+    {
+        return $this->type === self::TYPE_TRANSFER;
+    }
+
+    public function isConfirmed(): bool
+    {
+        return $this->status === self::STATUS_CONFIRMED;
     }
 
     public static function paymentMethodLabel(string $method): string

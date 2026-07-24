@@ -144,6 +144,8 @@ class LevitaDomainTest extends TestCase
                 'type' => 'credit',
                 'last_four' => '4321',
                 'color' => '#820ad1',
+                'closing_day' => 10,
+                'due_day' => 17,
             ])
             ->assertRedirect();
 
@@ -168,6 +170,8 @@ class LevitaDomainTest extends TestCase
                 'type' => 'credit',
                 'last_four' => '',
                 'color' => '#ffc107',
+                'closing_day' => 5,
+                'due_day' => 12,
             ])
             ->assertRedirect();
 
@@ -214,6 +218,8 @@ class LevitaDomainTest extends TestCase
             'type' => 'credit',
             'last_four' => '1111',
             'color' => '#ffc107',
+                    'closing_day' => 10,
+            'due_day' => 17,
         ]);
 
         $this->actingAs($dependent)
@@ -223,6 +229,8 @@ class LevitaDomainTest extends TestCase
                 'type' => 'credit',
                 'last_four' => '9999',
                 'color' => '#000000',
+                'closing_day' => 10,
+                'due_day' => 17,
             ])
             ->assertForbidden();
 
@@ -233,6 +241,8 @@ class LevitaDomainTest extends TestCase
                 'type' => 'credit',
                 'last_four' => '1111',
                 'color' => '#ffc107',
+                'closing_day' => 10,
+                'due_day' => 17,
             ])
             ->assertRedirect();
     }
@@ -251,6 +261,8 @@ class LevitaDomainTest extends TestCase
             'type' => 'credit',
             'last_four' => '5555',
             'color' => '#00a868',
+                    'closing_day' => 10,
+            'due_day' => 17,
         ]);
 
         $this->actingAs($owner)
@@ -260,6 +272,8 @@ class LevitaDomainTest extends TestCase
                 'type' => 'credit',
                 'last_four' => '5555',
                 'color' => '#00a868',
+                'closing_day' => 10,
+                'due_day' => 17,
             ])
             ->assertRedirect();
 
@@ -284,6 +298,8 @@ class LevitaDomainTest extends TestCase
             'type' => 'credit',
             'last_four' => '0000',
             'color' => '#111111',
+                    'closing_day' => 10,
+            'due_day' => 17,
         ]);
 
         $this->actingAs($userA)
@@ -293,6 +309,8 @@ class LevitaDomainTest extends TestCase
                 'type' => 'credit',
                 'last_four' => '0000',
                 'color' => '#111111',
+                'closing_day' => 10,
+                'due_day' => 17,
             ])
             ->assertNotFound();
     }
@@ -313,6 +331,8 @@ class LevitaDomainTest extends TestCase
             'type' => 'credit',
             'last_four' => '2222',
             'color' => '#222222',
+                    'closing_day' => 10,
+            'due_day' => 17,
         ]);
 
         $cardA = PaymentCard::withoutGlobalScopes()->create([
@@ -323,6 +343,8 @@ class LevitaDomainTest extends TestCase
             'type' => 'credit',
             'last_four' => '3333',
             'color' => '#333333',
+                    'closing_day' => 10,
+            'due_day' => 17,
         ]);
 
         $this->actingAs($userA)
@@ -370,6 +392,8 @@ class LevitaDomainTest extends TestCase
             'type' => 'credit',
             'last_four' => '4444',
             'color' => '#444444',
+                    'closing_day' => 10,
+            'due_day' => 17,
         ]);
 
         Transaction::withoutGlobalScopes()->create([
@@ -466,6 +490,8 @@ class LevitaDomainTest extends TestCase
                 'last_four' => '',
                 'color' => '#ffc107',
                 'bank_account_id' => $bank->id,
+                'closing_day' => 8,
+                'due_day' => 15,
             ])
             ->assertRedirect();
 

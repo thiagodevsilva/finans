@@ -20,6 +20,10 @@ export const PAYMENT_METHODS = [
 
 export function paymentLabel(tx) {
     if (!tx) return '';
+    if (tx.type === 'transfer') {
+        const card = tx.payment_card?.name ? ` · ${tx.payment_card.name}` : '';
+        return `Pagamento de fatura${card}`;
+    }
     if (tx.type === 'income') {
         return tx.bank_account?.name || 'Sem conta';
     }

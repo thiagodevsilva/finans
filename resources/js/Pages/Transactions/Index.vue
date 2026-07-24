@@ -49,9 +49,16 @@ const destroy = (tx) => {
                 <h1 class="text-xl font-bold text-navy-700 sm:text-2xl">Transações</h1>
                 <p class="text-sm text-horizon-500">Todas as movimentações da conta</p>
             </div>
-            <Link :href="route('transactions.create')">
-                <PrimaryButton>Adicionar</PrimaryButton>
-            </Link>
+            <div class="flex flex-wrap gap-2">
+                <Link :href="route('installment-plans.create')">
+                    <button type="button" class="rounded-xl border border-horizon-200 bg-white px-4 py-2 text-sm font-semibold text-navy-700 shadow-soft">
+                        Compra parcelada
+                    </button>
+                </Link>
+                <Link :href="route('transactions.create')">
+                    <PrimaryButton>Adicionar</PrimaryButton>
+                </Link>
+            </div>
         </div>
 
         <form class="mb-4 flex flex-wrap gap-2 sm:mb-6 sm:gap-3" @change="applyFilters">
@@ -65,6 +72,7 @@ const destroy = (tx) => {
                 <option value="">Todos os tipos</option>
                 <option value="income">Entradas</option>
                 <option value="expense">Saídas</option>
+                <option value="transfer">Pagamentos de fatura</option>
             </select>
             <select name="category_id" class="rounded-xl border-horizon-200 text-sm text-navy-700" :value="filters.category_id || ''">
                 <option value="">Todas as categorias</option>

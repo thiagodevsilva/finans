@@ -4,13 +4,19 @@ namespace App\Providers;
 
 use App\Models\BankAccount;
 use App\Models\Category;
+use App\Models\CreditCardInvoice;
+use App\Models\InstallmentPlan;
 use App\Models\PaymentCard;
+use App\Models\RecurringBill;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Policies\BankAccountPolicy;
 use App\Policies\CategoryPolicy;
+use App\Policies\CreditCardInvoicePolicy;
+use App\Policies\InstallmentPlanPolicy;
 use App\Policies\MemberPolicy;
 use App\Policies\PaymentCardPolicy;
+use App\Policies\RecurringBillPolicy;
 use App\Policies\TransactionPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
@@ -19,7 +25,10 @@ class AuthServiceProvider extends ServiceProvider
     protected $policies = [
         BankAccount::class => BankAccountPolicy::class,
         Category::class => CategoryPolicy::class,
+        CreditCardInvoice::class => CreditCardInvoicePolicy::class,
+        InstallmentPlan::class => InstallmentPlanPolicy::class,
         PaymentCard::class => PaymentCardPolicy::class,
+        RecurringBill::class => RecurringBillPolicy::class,
         Transaction::class => TransactionPolicy::class,
         User::class => MemberPolicy::class,
     ];

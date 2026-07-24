@@ -26,6 +26,7 @@ class TransactionFactory extends Factory
             'payment_method' => Transaction::PAYMENT_CASH,
             'payment_card_id' => null,
             'bank_account_id' => null,
+            'status' => Transaction::STATUS_CONFIRMED,
         ];
     }
 }

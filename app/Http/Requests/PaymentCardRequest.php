@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Models\PaymentCard;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class PaymentCardRequest extends FormRequest
 {
@@ -16,6 +17,7 @@ class PaymentCardRequest extends FormRequest
     public function rules(): array
     {
         $accountId = $this->user()->account_id;
+        $isCredit = $this->input('type') === PaymentCard::TYPE_CREDIT;
 
         return [
             'name' => ['required', 'string', 'max:100'],
@@ -28,7 +30,34 @@ class PaymentCardRequest extends FormRequest
                 'uuid',
                 Rule::exists('bank_accounts', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
             ],
+            'closing_day' => [
+                Rule::requiredIf($isCredit),
+                'nullable',
+                'integer',
+                'min:1',
+                'max:31',
+            ],
+            'due_day' => [
+                Rule::requiredIf($isCredit),
+                'nullable',
+                'integer',
+                'min:1',
+                'max:31',
+            ],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            if ($this->input('type') !== PaymentCard::TYPE_CREDIT) {
+                return;
+            }
+
+            if ((int) $this->input('closing_day') === (int) $this->input('due_day')) {
+                $validator->errors()->add('due_day', 'O vencimento deve ser diferente do fechamento.');
+            }
+        });
     }
 
     protected function prepareForValidation(): void
@@ -39,6 +68,13 @@ class PaymentCardRequest extends FormRequest
 
         if ($this->input('bank_account_id') === '' || $this->input('bank_account_id') === null) {
             $this->merge(['bank_account_id' => null]);
+        }
+
+        if ($this->input('type') === PaymentCard::TYPE_DEBIT) {
+            $this->merge([
+                'closing_day' => null,
+                'due_day' => null,
+            ]);
         }
     }
 
@@ -51,6 +87,8 @@ class PaymentCardRequest extends FormRequest
             'last_four' => 'final do cartão',
             'color' => 'cor',
             'bank_account_id' => 'conta',
+            'closing_day' => 'dia de fechamento',
+            'due_day' => 'dia de vencimento',
         ];
     }
 }
