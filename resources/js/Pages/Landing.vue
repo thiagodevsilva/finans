@@ -11,7 +11,7 @@ const appName = computed(() => page.props.app?.name || 'Levita');
 
 const seoTitle = 'Controle de finanças da família, orçamento e gastos do dia a dia';
 const seoDescription =
-    'Organize as finanças da família de graça: controle de gastos do dia a dia, orçamento compartilhado, categorias, cartões e contas. Mais tranquilidade no mês a dois.';
+    'Organize as finanças de graça: controle de gastos do dia a dia, orçamento para solteiros, casais e famílias. Mais tranquilidade no mês.';
 const seoKeywords = [
     'controle financeiro',
     'finanças pessoais',
@@ -143,7 +143,10 @@ const jsonLd = computed(() =>
                 <div class="flex flex-col justify-center px-4 py-14 text-white md:py-16">
                     <h1 class="text-4xl font-bold leading-tight md:text-5xl">A vida financeira da sua família, em sintonia.</h1>
                     <p class="mt-4 text-lg text-white/90">
-                        Um jeito simples e gratuito de planejar o mês a dois, acompanhar os gastos da casa e ter mais tranquilidade no orçamento.
+                        Um jeito simples e gratuito de planejar o mês, acompanhar os gastos da casa e ter mais tranquilidade no orçamento.
+                    </p>
+                    <p class="mt-3 text-base font-semibold text-cta md:text-lg">
+                        Pensado para solteiros, casais e famílias
                     </p>
                     <div class="mt-8 flex flex-wrap items-center gap-3">
                         <Link
@@ -188,9 +191,9 @@ const jsonLd = computed(() =>
         <section class="border-b border-[#e5e5e5] py-16">
             <div class="mx-auto grid max-w-6xl items-center gap-10 px-4 md:grid-cols-2">
                 <div class="order-2 md:order-1">
-                    <h2 class="text-3xl font-bold">Planejamento financeiro feito a dois (ou em família)</h2>
+                    <h2 class="text-3xl font-bold">Planejamento financeiro pensado a dois ou para toda a família</h2>
                     <p class="mt-4 text-slate-600">
-                        Convide o seu cônjuge ou familiares para somar. Todo mundo participa registrando as compras do dia a dia, enquanto você mantém o controle total das configurações.
+                        Convide o seu cônjuge ou familiares para somar. Todo mundo participa registrando os gastos do dia a dia, enquanto você mantém o controle total das configurações.
                     </p>
                 </div>
                 <div class="order-1 md:order-2">
@@ -201,7 +204,7 @@ const jsonLd = computed(() =>
 
         <section class="py-16">
             <div class="mx-auto max-w-6xl px-4 text-center">
-                <h2 class="text-3xl font-bold">Por que Levita?</h2>
+                <h2 class="text-3xl font-bold">Por que escolher Levita?</h2>
                 <div class="mt-12 grid gap-10 md:grid-cols-3">
                     <div>
                         <img src="/images/facil.png" alt="" class="mx-auto h-20">
@@ -293,9 +296,9 @@ const jsonLd = computed(() =>
                 <div>
                     <p class="text-sm font-semibold uppercase tracking-wide text-white">Para quem é</p>
                     <ul class="mt-4 space-y-2 text-sm text-horizon-400">
+                        <li>Solteiros organizando o mês</li>
                         <li>Casais que dividem as contas</li>
                         <li>Famílias no dia a dia</li>
-                        <li>Quem quer paz no orçamento</li>
                     </ul>
                 </div>
             </div>
