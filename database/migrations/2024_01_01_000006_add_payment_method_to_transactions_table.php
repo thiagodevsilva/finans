@@ -10,7 +10,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('transactions', function (Blueprint $table) {
-            $table->string('payment_method')->default('cash')->after('date');
+            // Nullable: entradas e pagamentos de fatura (transfer) não usam forma de pagamento.
+            $table->string('payment_method')->nullable()->default('cash')->after('date');
             $table->foreignUuid('payment_card_id')
                 ->nullable()
                 ->after('payment_method')

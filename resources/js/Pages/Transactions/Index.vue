@@ -49,16 +49,9 @@ const destroy = (tx) => {
                 <h1 class="text-xl font-bold text-navy-700 sm:text-2xl">Transações</h1>
                 <p class="text-sm text-horizon-500">Todas as movimentações da conta</p>
             </div>
-            <div class="flex flex-wrap gap-2">
-                <Link :href="route('installment-plans.create')">
-                    <button type="button" class="rounded-xl border border-horizon-200 bg-white px-4 py-2 text-sm font-semibold text-navy-700 shadow-soft">
-                        Compra parcelada
-                    </button>
-                </Link>
-                <Link :href="route('transactions.create')">
-                    <PrimaryButton>Adicionar</PrimaryButton>
-                </Link>
-            </div>
+            <Link :href="route('transactions.create')">
+                <PrimaryButton>Adicionar</PrimaryButton>
+            </Link>
         </div>
 
         <form class="mb-4 flex flex-wrap gap-2 sm:mb-6 sm:gap-3" @change="applyFilters">

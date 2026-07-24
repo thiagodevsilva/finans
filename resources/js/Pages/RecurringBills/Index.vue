@@ -21,6 +21,7 @@ const userId = computed(() => page.props.auth.user.id);
 
 const editing = ref(null);
 const confirming = ref(null);
+const showForm = ref(false);
 
 const form = useForm({
     description: '',
@@ -56,6 +57,7 @@ watch(
 
 const resetForm = () => {
     editing.value = null;
+    showForm.value = false;
     form.reset();
     form.day_of_month = 10;
     form.payment_selection = 'pix';
@@ -63,7 +65,19 @@ const resetForm = () => {
     form.start_date = new Date().toISOString().slice(0, 10);
 };
 
+const openCreateForm = () => {
+    editing.value = null;
+    form.reset();
+    form.day_of_month = 10;
+    form.payment_selection = 'pix';
+    form.payment_method = 'pix';
+    form.start_date = new Date().toISOString().slice(0, 10);
+    form.clearErrors();
+    showForm.value = true;
+};
+
 const startEdit = (bill) => {
+    showForm.value = true;
     editing.value = bill.id;
     form.description = bill.description;
     form.category_id = bill.category_id;
@@ -124,12 +138,19 @@ const skip = (item) => {
     <Head title="Contas fixas" />
 
     <AppLayout>
-        <div class="mb-6">
-            <h1 class="text-2xl font-bold text-navy-700">Contas fixas</h1>
-            <p class="text-sm text-horizon-500">Água, luz, internet e outras contas que se repetem todo mês</p>
+        <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-navy-700">Contas fixas</h1>
+                <p class="text-sm text-horizon-500">Água, luz, internet e outras contas que se repetem todo mês</p>
+            </div>
+            <PrimaryButton v-if="!showForm" type="button" @click="openCreateForm">Cadastrar conta fixa</PrimaryButton>
         </div>
 
-        <form class="mb-8 grid max-w-4xl gap-3 rounded-[20px] bg-white p-5 shadow-soft sm:grid-cols-2" @submit.prevent="submit">
+        <form
+            v-if="showForm"
+            class="mb-8 grid max-w-4xl gap-3 rounded-[20px] bg-white p-5 shadow-soft sm:grid-cols-2"
+            @submit.prevent="submit"
+        >
             <div class="sm:col-span-2">
                 <InputLabel value="Descrição" />
                 <TextInput class="mt-1 block w-full" v-model="form.description" placeholder="Ex.: Internet" required />
@@ -179,7 +200,7 @@ const skip = (item) => {
             </div>
             <div class="flex items-end gap-2 sm:col-span-2">
                 <PrimaryButton :disabled="form.processing">{{ editing ? 'Salvar' : 'Adicionar conta fixa' }}</PrimaryButton>
-                <button v-if="editing" type="button" class="text-sm text-horizon-600 underline" @click="resetForm">Cancelar</button>
+                <button type="button" class="text-sm text-horizon-600 underline" @click="resetForm">Cancelar</button>
             </div>
         </form>
 

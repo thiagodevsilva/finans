@@ -83,7 +83,7 @@ class RecurringBillService
         }
     }
 
-    public function confirm(Transaction $transaction, float $amount, ?string $date = null): Transaction
+    public function confirm(Transaction $transaction, float $amount, ?string $date = null, array $payment = []): Transaction
     {
         if (! $transaction->recurring_bill_id) {
             throw new \InvalidArgumentException('Transação não é de conta fixa.');
@@ -98,11 +98,16 @@ class RecurringBillService
             $updates['date'] = $date;
         }
 
-        if (
-            $transaction->payment_method === Transaction::PAYMENT_CARD
-            && $transaction->payment_card_id
-        ) {
-            $card = PaymentCard::query()->find($transaction->payment_card_id);
+        if (array_key_exists('payment_method', $payment)) {
+            $updates['payment_method'] = $payment['payment_method'];
+            $updates['payment_card_id'] = $payment['payment_card_id'] ?? null;
+        }
+
+        $method = $updates['payment_method'] ?? $transaction->payment_method;
+        $cardId = $updates['payment_card_id'] ?? $transaction->payment_card_id;
+
+        if ($method === Transaction::PAYMENT_CARD && $cardId) {
+            $card = PaymentCard::query()->find($cardId);
             if ($card) {
                 $invoice = $this->invoiceService->resolveForPurchase(
                     $card,
@@ -110,6 +115,8 @@ class RecurringBillService
                 );
                 $updates['credit_card_invoice_id'] = $invoice?->id;
             }
+        } else {
+            $updates['credit_card_invoice_id'] = null;
         }
 
         $transaction->update($updates);

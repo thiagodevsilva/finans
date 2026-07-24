@@ -145,7 +145,7 @@ const jsonLd = computed(() =>
                     <p class="mt-4 text-lg text-white/90">
                         Um jeito simples e gratuito de planejar o mês, acompanhar os gastos da casa e ter mais tranquilidade no orçamento.
                     </p>
-                    <p class="mt-3 text-base font-semibold text-cta md:text-lg">
+                    <p class="mt-4 inline-flex w-max max-w-full rounded-full bg-cta px-4 py-1.5 text-sm font-semibold text-white md:text-base">
                         Pensado para solteiros, casais e famílias
                     </p>
                     <div class="mt-8 flex flex-wrap items-center gap-3">

@@ -8,6 +8,8 @@ use App\Models\Category;
 use App\Models\PaymentCard;
 use App\Models\Transaction;
 use App\Services\CreditCardInvoiceService;
+use App\Services\InstallmentPlanService;
+use App\Services\RecurringBillService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,7 +19,9 @@ use Inertia\Response;
 class TransactionController extends Controller
 {
     public function __construct(
-        private readonly CreditCardInvoiceService $invoiceService
+        private readonly CreditCardInvoiceService $invoiceService,
+        private readonly InstallmentPlanService $installmentPlanService,
+        private readonly RecurringBillService $recurringBillService,
     ) {}
 
     public function index(Request $request): Response
@@ -73,6 +77,7 @@ class TransactionController extends Controller
             'categories' => Category::query()->orderBy('name')->get(['id', 'name', 'color']),
             'paymentCards' => $this->paymentCardsForForm(),
             'bankAccounts' => $this->bankAccountsForForm(),
+            'pendingRecurring' => $this->pendingRecurringForForm(),
         ]);
     }
 
@@ -81,8 +86,50 @@ class TransactionController extends Controller
         $this->authorize('create', Transaction::class);
 
         $data = $request->validated();
+
+        if (! empty($data['is_installment'])) {
+            $plan = $this->installmentPlanService->create($request->user(), [
+                'description' => $data['description'],
+                'category_id' => $data['category_id'],
+                'payment_card_id' => $data['payment_card_id'],
+                'total_amount' => $data['total_amount'],
+                'installments_count' => $data['installments_count'],
+                'purchase_date' => $data['date'],
+                'first_installment_date' => $data['date'],
+            ]);
+
+            return redirect()
+                ->route('installment-plans.show', $plan)
+                ->with('success', 'Compra parcelada cadastrada.');
+        }
+
+        if (! empty($data['recurring_transaction_id'])) {
+            $planned = Transaction::query()->findOrFail($data['recurring_transaction_id']);
+            $this->authorize('update', $planned);
+
+            $this->recurringBillService->confirm(
+                $planned,
+                (float) $data['amount'],
+                $data['date'],
+                [
+                    'payment_method' => $data['payment_method'] ?? null,
+                    'payment_card_id' => $data['payment_card_id'] ?? null,
+                ]
+            );
+
+            if (isset($data['description']) || isset($data['category_id'])) {
+                $planned->update([
+                    'description' => $data['description'] ?? $planned->description,
+                    'category_id' => $data['category_id'] ?? $planned->category_id,
+                ]);
+            }
+
+            return redirect()->route('transactions.index')->with('success', 'Conta fixa marcada como paga.');
+        }
+
         $data['status'] = Transaction::STATUS_CONFIRMED;
         $data['credit_card_invoice_id'] = $this->resolveInvoiceId($data);
+        unset($data['is_installment'], $data['total_amount'], $data['installments_count'], $data['installment_amount'], $data['recurring_transaction_id']);
 
         Transaction::create([
             ...$data,
@@ -110,6 +157,7 @@ class TransactionController extends Controller
             'categories' => Category::query()->orderBy('name')->get(['id', 'name', 'color']),
             'paymentCards' => $this->paymentCardsForForm(),
             'bankAccounts' => $this->bankAccountsForForm(),
+            'pendingRecurring' => $this->pendingRecurringForForm(),
         ]);
     }
 
@@ -123,6 +171,12 @@ class TransactionController extends Controller
         }
 
         $data = $request->validated();
+
+        if (! empty($data['is_installment'])) {
+            return back()->with('error', 'Não é possível converter um lançamento existente em compra parcelada.');
+        }
+
+        unset($data['is_installment'], $data['total_amount'], $data['installments_count'], $data['installment_amount'], $data['recurring_transaction_id']);
         $data['credit_card_invoice_id'] = $this->resolveInvoiceId($data);
 
         $transaction->update($data);
@@ -171,5 +225,38 @@ class TransactionController extends Controller
         return BankAccount::query()
             ->orderBy('name')
             ->get(['id', 'name', 'color']);
+    }
+
+    private function pendingRecurringForForm(): array
+    {
+        $today = now()->toDateString();
+
+        return Transaction::query()
+            ->with(['category:id,name,color', 'recurringBill:id,description'])
+            ->whereNotNull('recurring_bill_id')
+            ->where('status', Transaction::STATUS_PLANNED)
+            ->where('date', '<=', now()->addMonthsNoOverflow(2)->endOfMonth()->toDateString())
+            ->orderByRaw('CASE WHEN date < ? THEN 0 ELSE 1 END', [$today])
+            ->orderBy('date')
+            ->get()
+            ->map(fn (Transaction $tx) => [
+                'id' => $tx->id,
+                'description' => $tx->description,
+                'amount' => (float) $tx->amount,
+                'date' => $tx->date->toDateString(),
+                'category_id' => $tx->category_id,
+                'category' => $tx->category,
+                'payment_method' => $tx->payment_method,
+                'payment_card_id' => $tx->payment_card_id,
+                'overdue' => $tx->date->toDateString() < $today,
+                'label' => sprintf(
+                    '%s · %s · %s%s',
+                    $tx->description,
+                    $tx->date->format('d/m/Y'),
+                    number_format((float) $tx->amount, 2, ',', '.'),
+                    $tx->date->toDateString() < $today ? ' · vencida' : ' · pendente'
+                ),
+            ])
+            ->all();
     }
 }

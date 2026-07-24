@@ -3,9 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\InstallmentPlanRequest;
-use App\Models\Category;
 use App\Models\InstallmentPlan;
-use App\Models\PaymentCard;
 use App\Models\Transaction;
 use App\Services\InstallmentPlanService;
 use Illuminate\Http\RedirectResponse;
@@ -18,17 +16,11 @@ class InstallmentPlanController extends Controller
         private readonly InstallmentPlanService $service
     ) {}
 
-    public function create(): Response
+    public function create(): RedirectResponse
     {
         $this->authorize('create', InstallmentPlan::class);
 
-        return Inertia::render('Installments/Form', [
-            'categories' => Category::query()->orderBy('name')->get(['id', 'name', 'color']),
-            'paymentCards' => PaymentCard::query()
-                ->where('type', PaymentCard::TYPE_CREDIT)
-                ->orderBy('name')
-                ->get(['id', 'name', 'brand', 'type', 'last_four', 'color', 'closing_day', 'due_day']),
-        ]);
+        return redirect()->route('transactions.create');
     }
 
     public function store(InstallmentPlanRequest $request): RedirectResponse

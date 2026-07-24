@@ -17,8 +17,11 @@ return new class extends Migration
                 ->nullOnDelete();
         });
 
-        // Entradas não usam forma de pagamento; saídas mantêm.
-        if (Schema::getConnection()->getDriverName() === 'mysql') {
+        // Entradas / transferências de fatura não usam forma de pagamento.
+        // Em instalações novas a coluna já nasce nullable (migration 000006).
+        // Em MySQL legado ainda pode estar NOT NULL.
+        $driver = Schema::getConnection()->getDriverName();
+        if ($driver === 'mysql') {
             DB::statement('ALTER TABLE transactions MODIFY payment_method VARCHAR(255) NULL');
         }
 

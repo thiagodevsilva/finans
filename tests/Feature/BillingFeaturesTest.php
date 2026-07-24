@@ -104,14 +104,16 @@ class BillingFeaturesTest extends TestCase
         ]);
 
         $this->actingAs($owner)
-            ->post(route('installment-plans.store'), [
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_EXPENSE,
                 'description' => 'Notebook',
                 'category_id' => $category->id,
+                'date' => '2026-07-01',
+                'payment_method' => Transaction::PAYMENT_CARD,
                 'payment_card_id' => $card->id,
+                'is_installment' => true,
                 'total_amount' => 100,
                 'installments_count' => 3,
-                'purchase_date' => '2026-07-01',
-                'first_installment_date' => '2026-07-01',
             ])
             ->assertRedirect();
 
@@ -176,6 +178,47 @@ class BillingFeaturesTest extends TestCase
             ->assertInertia(fn ($page) => $page->where('summary.expense', 135.5));
     }
 
+    public function test_expense_form_can_confirm_planned_recurring_bill(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-bills.store'), [
+                'description' => 'Luz',
+                'category_id' => $category->id,
+                'estimated_amount' => 200,
+                'day_of_month' => 10,
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'start_date' => now()->startOfMonth()->toDateString(),
+            ])
+            ->assertRedirect();
+
+        $planned = Transaction::withoutGlobalScopes()
+            ->where('description', 'Luz')
+            ->where('status', Transaction::STATUS_PLANNED)
+            ->first();
+
+        $this->assertNotNull($planned);
+
+        $this->actingAs($owner)
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_EXPENSE,
+                'amount' => 210,
+                'description' => 'Luz',
+                'category_id' => $category->id,
+                'date' => $planned->date->toDateString(),
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'recurring_transaction_id' => $planned->id,
+            ])
+            ->assertRedirect(route('transactions.index'));
+
+        $planned->refresh();
+        $this->assertSame(Transaction::STATUS_CONFIRMED, $planned->status);
+        $this->assertEquals(210, (float) $planned->amount);
+    }
+
     public function test_dependent_cannot_cancel_other_members_installment_plan(): void
     {
         $account = Account::factory()->create();
@@ -194,14 +237,16 @@ class BillingFeaturesTest extends TestCase
         ]);
 
         $this->actingAs($owner)
-            ->post(route('installment-plans.store'), [
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_EXPENSE,
                 'description' => 'TV',
                 'category_id' => $category->id,
+                'date' => now()->toDateString(),
+                'payment_method' => Transaction::PAYMENT_CARD,
                 'payment_card_id' => $card->id,
+                'is_installment' => true,
                 'total_amount' => 300,
                 'installments_count' => 3,
-                'purchase_date' => now()->toDateString(),
-                'first_installment_date' => now()->toDateString(),
             ])
             ->assertRedirect();
 
