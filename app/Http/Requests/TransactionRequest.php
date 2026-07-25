@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\PaymentCard;
 use App\Models\Transaction;
+use App\Services\DefaultCategoryService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -21,6 +22,7 @@ class TransactionRequest extends FormRequest
         $isIncome = $this->input('type') === Transaction::TYPE_INCOME;
         $isExpense = $this->input('type') === Transaction::TYPE_EXPENSE;
         $isTransfer = $this->input('type') === Transaction::TYPE_TRANSFER;
+        $isInvestment = $this->input('type') === Transaction::TYPE_INVESTMENT;
         $isCard = $isExpense && $this->input('payment_method') === Transaction::PAYMENT_CARD;
         $isInstallment = $isExpense && $this->boolean('is_installment');
         $needsBank = in_array($this->input('payment_method'), [
@@ -35,6 +37,7 @@ class TransactionRequest extends FormRequest
                     Transaction::TYPE_INCOME,
                     Transaction::TYPE_EXPENSE,
                     Transaction::TYPE_TRANSFER,
+                    Transaction::TYPE_INVESTMENT,
                 ]),
             ],
             'amount' => [
@@ -50,16 +53,20 @@ class TransactionRequest extends FormRequest
                 'max:255',
             ],
             'category_id' => [
-                Rule::requiredIf($isIncome || $isExpense),
+                Rule::requiredIf($isIncome || $isExpense || $isInvestment),
                 'nullable',
                 'uuid',
                 Rule::exists('categories', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
             ],
             'date' => ['required', 'date'],
             'payment_method' => [
-                Rule::requiredIf($isExpense || $isTransfer),
+                Rule::requiredIf($isExpense || $isTransfer || $isInvestment),
                 'nullable',
-                Rule::in(Transaction::PAYMENT_METHODS),
+                Rule::in(
+                    $isInvestment
+                        ? Transaction::INVESTMENT_PAYMENT_METHODS
+                        : Transaction::PAYMENT_METHODS
+                ),
             ],
             'payment_card_id' => [
                 Rule::requiredIf($isCard || $isTransfer),
@@ -120,6 +127,14 @@ class TransactionRequest extends FormRequest
                 return;
             }
 
+            if ($this->input('type') === Transaction::TYPE_INVESTMENT) {
+                if ($this->filled('payment_card_id')) {
+                    $validator->errors()->add('payment_card_id', 'Investimento não pode usar cartão.');
+                }
+
+                return;
+            }
+
             if ($this->input('type') !== Transaction::TYPE_EXPENSE) {
                 return;
             }
@@ -168,6 +183,27 @@ class TransactionRequest extends FormRequest
                     ? $this->input('bank_account_id')
                     : null,
                 'description' => null,
+            ]);
+
+            return;
+        }
+
+        if ($this->input('type') === Transaction::TYPE_INVESTMENT) {
+            $category = app(DefaultCategoryService::class)
+                ->ensureInvestmentCategory($this->user()->account);
+
+            $this->merge([
+                'category_id' => $category->id,
+                'payment_card_id' => null,
+                'is_installment' => false,
+                'total_amount' => null,
+                'installments_count' => null,
+                'installment_amount' => null,
+                'recurring_transaction_id' => null,
+                'recurring_bill_id' => null,
+                'bank_account_id' => $needsBank && $this->filled('bank_account_id')
+                    ? $this->input('bank_account_id')
+                    : null,
             ]);
 
             return;

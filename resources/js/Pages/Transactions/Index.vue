@@ -65,6 +65,7 @@ const destroy = (tx) => {
                 <option value="">Todos os tipos</option>
                 <option value="income">Entradas</option>
                 <option value="expense">Saídas</option>
+                <option value="investment">Investimentos</option>
                 <option value="transfer">Pagamentos de fatura</option>
             </select>
             <select name="category_id" class="rounded-xl border-horizon-200 text-sm text-navy-700" :value="filters.category_id || ''">

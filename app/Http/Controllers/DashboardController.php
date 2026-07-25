@@ -30,12 +30,16 @@ class DashboardController extends Controller
             ->where('type', Transaction::TYPE_INCOME)
             ->sum('amount');
 
-        // Competência: todo gasto do mês (inclui compras no crédito; exclui pagamento de fatura).
+        // Competência: gastos de consumo (exclui fatura e investimentos).
         $expense = (float) (clone $confirmedInMonth())
             ->where('type', Transaction::TYPE_EXPENSE)
             ->sum('amount');
 
-        // Caixa: saiu da conta (PIX/dinheiro/débito) + pagamento de fatura (exceto com outro cartão).
+        $investments = (float) (clone $confirmedInMonth())
+            ->where('type', Transaction::TYPE_INVESTMENT)
+            ->sum('amount');
+
+        // Caixa: saiu da conta (PIX/dinheiro/débito) + fatura + aportes.
         $cashExpense = (clone $confirmedInMonth())
             ->where('type', Transaction::TYPE_EXPENSE)
             ->where(function ($q) {
@@ -54,7 +58,7 @@ class DashboardController extends Controller
             })
             ->sum('amount');
 
-        $cashFlow = (float) $cashExpense + (float) $invoicePayments;
+        $cashFlow = (float) $cashExpense + (float) $invoicePayments + $investments;
 
         $invoiceSummary = $this->invoiceSummary($today);
 
@@ -96,6 +100,7 @@ class DashboardController extends Controller
             'summary' => [
                 'income' => (float) $income,
                 'expense' => $expense,
+                'investments' => $investments,
                 'cash_flow' => $cashFlow,
                 'balance' => (float) $income - $expense,
             ],

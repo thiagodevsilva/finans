@@ -66,4 +66,8 @@
     .tx-row-transfer {
         @apply border-l-4 border-l-slate-600 bg-slate-200/90;
     }
+
+    .tx-row-investment {
+        @apply border-l-4 border-l-teal-600 bg-teal-50/90;
+    }
 }

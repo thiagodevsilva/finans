@@ -37,6 +37,11 @@ export function paymentLabel(tx) {
     if (tx.type === 'income') {
         return tx.bank_account?.name || 'Sem conta';
     }
+    if (tx.type === 'investment') {
+        const method = PAYMENT_METHOD_LABELS[tx.payment_method] || 'Aporte';
+        const bank = tx.bank_account?.name ? ` · ${tx.bank_account.name}` : '';
+        return `${method}${bank}`;
+    }
     if (tx.payment_method === 'card' && tx.payment_card) {
         return formatCardLabel(tx.payment_card);
     }

@@ -21,11 +21,14 @@ class DefaultCategoryService
             ['name' => 'Educação', 'color' => '#6366f1', 'icon' => 'book'],
             ['name' => 'Salário', 'color' => '#22c55e', 'icon' => 'briefcase'],
             ['name' => 'Fatura cartão', 'color' => '#475569', 'icon' => 'credit-card'],
+            ['name' => 'Investimento', 'color' => '#0d9488', 'icon' => 'trending-up'],
             ['name' => 'Outros', 'color' => '#64748b', 'icon' => 'box'],
         ];
     }
 
     public const INVOICE_PAYMENT_NAME = 'Fatura cartão';
+
+    public const INVESTMENT_NAME = 'Investimento';
 
     public function ensureInvoicePaymentCategory(Account $account): Category
     {
@@ -37,6 +40,20 @@ class DefaultCategoryService
             [
                 'color' => '#475569',
                 'icon' => 'credit-card',
+            ]
+        );
+    }
+
+    public function ensureInvestmentCategory(Account $account): Category
+    {
+        return Category::withoutGlobalScopes()->firstOrCreate(
+            [
+                'account_id' => $account->id,
+                'name' => self::INVESTMENT_NAME,
+            ],
+            [
+                'color' => '#0d9488',
+                'icon' => 'trending-up',
             ]
         );
     }

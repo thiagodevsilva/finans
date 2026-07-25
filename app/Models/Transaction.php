@@ -18,6 +18,8 @@ class Transaction extends Model
 
     public const TYPE_TRANSFER = 'transfer';
 
+    public const TYPE_INVESTMENT = 'investment';
+
     public const STATUS_PLANNED = 'planned';
 
     public const STATUS_CONFIRMED = 'confirmed';
@@ -39,6 +41,13 @@ class Transaction extends Model
         self::PAYMENT_PIX,
         self::PAYMENT_TRANSFER,
         self::PAYMENT_CARD,
+    ];
+
+    /** Formas de pagamento permitidas para aporte (sem cartão). */
+    public const INVESTMENT_PAYMENT_METHODS = [
+        self::PAYMENT_CASH,
+        self::PAYMENT_PIX,
+        self::PAYMENT_TRANSFER,
     ];
 
     protected $fillable = [
@@ -112,6 +121,11 @@ class Transaction extends Model
     public function isTransfer(): bool
     {
         return $this->type === self::TYPE_TRANSFER;
+    }
+
+    public function isInvestment(): bool
+    {
+        return $this->type === self::TYPE_INVESTMENT;
     }
 
     public function isConfirmed(): bool

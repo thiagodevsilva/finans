@@ -74,6 +74,7 @@ const installmentSource = ref(null);
 const typeOptions = [
     { value: 'expense', label: 'Saída' },
     { value: 'income', label: 'Entrada' },
+    { value: 'investment', label: 'Investimento' },
     { value: 'transfer', label: 'Pagamento de fatura' },
 ];
 
@@ -87,6 +88,8 @@ const invoicePaymentMethods = [
 const needsBankAccount = computed(() =>
     form.payment_method === 'pix' || form.payment_method === 'transfer',
 );
+
+const isInvestment = computed(() => form.type === 'investment');
 
 const selectedCard = computed(() => {
     if (!form.payment_card_id) return null;
@@ -131,6 +134,14 @@ watch(
     () => form.payment_selection,
     (value) => {
         if (form.type === 'transfer') return;
+        if (form.type === 'investment') {
+            form.payment_method = value;
+            form.payment_card_id = null;
+            if (value !== 'pix' && value !== 'transfer') {
+                form.bank_account_id = '';
+            }
+            return;
+        }
         if (String(value).startsWith('card:')) {
             form.payment_method = 'card';
             form.payment_card_id = String(value).slice(5);
@@ -175,6 +186,16 @@ watch(
             recurringSearch.value = '';
             billSearch.value = '';
             billPickerOpen.value = true;
+        }
+        if (type === 'investment') {
+            form.payment_card_id = null;
+            if (form.payment_method === 'card' || String(form.payment_selection).startsWith('card:')) {
+                form.payment_selection = 'cash';
+                form.payment_method = 'cash';
+            }
+            if (!needsBankAccount.value) {
+                form.bank_account_id = '';
+            }
         }
         if (type === 'transfer') {
             form.category_id = '';
@@ -280,6 +301,15 @@ const submit = () => {
         form.recurring_transaction_id = null;
         form.recurring_bill_id = null;
         if (!needsBankAccount.value) form.bank_account_id = null;
+    } else if (form.type === 'investment') {
+        form.payment_card_id = null;
+        form.is_installment = false;
+        form.recurring_transaction_id = null;
+        form.recurring_bill_id = null;
+        form.total_amount = null;
+        form.installments_count = null;
+        form.installment_amount = null;
+        if (!needsBankAccount.value) form.bank_account_id = null;
     } else {
         if (!needsBankAccount.value) form.bank_account_id = null;
         if (!form.recurring_transaction_id) form.recurring_transaction_id = null;
@@ -371,6 +401,50 @@ const submit = () => {
                 </p>
                 <p class="text-xs text-horizon-500">
                     PIX, transferência e dinheiro contam como saída de caixa. Pagamento com outro cartão não.
+                </p>
+            </template>
+
+            <template v-else-if="isInvestment">
+                <div>
+                    <InputLabel for="amount" value="Valor (R$)" />
+                    <TextInput id="amount" type="number" step="0.01" min="0.01" class="mt-1 block w-full" v-model="form.amount" required />
+                    <InputError class="mt-2" :message="form.errors.amount" />
+                </div>
+                <div>
+                    <InputLabel for="description" value="Descrição" />
+                    <TextInput id="description" type="text" class="mt-1 block w-full" v-model="form.description" required />
+                    <InputError class="mt-2" :message="form.errors.description" />
+                </div>
+                <div>
+                    <InputLabel value="Categoria" />
+                    <p class="mt-2 text-sm font-medium text-teal-800">Investimento</p>
+                    <p class="mt-1 text-xs text-horizon-500">Categoria padrão do sistema (automática).</p>
+                    <InputError class="mt-2" :message="form.errors.category_id" />
+                </div>
+                <div>
+                    <InputLabel value="Forma de pagamento" />
+                    <select v-model="form.payment_selection" class="mt-1 block w-full rounded-md border-slate-300" required>
+                        <option v-for="m in PAYMENT_METHODS" :key="m.value" :value="m.value">{{ m.label }}</option>
+                    </select>
+                    <InputError class="mt-2" :message="form.errors.payment_method" />
+                </div>
+                <div v-if="needsBankAccount">
+                    <InputLabel value="Conta bancária (opcional)" />
+                    <select v-model="form.bank_account_id" class="mt-1 block w-full rounded-md border-slate-300">
+                        <option value="">Sem conta</option>
+                        <option v-for="account in bankAccounts" :key="account.id" :value="account.id">
+                            {{ account.name }}
+                        </option>
+                    </select>
+                    <InputError class="mt-2" :message="form.errors.bank_account_id" />
+                </div>
+                <div>
+                    <InputLabel for="date" value="Data" />
+                    <TextInput id="date" type="date" class="mt-1 block w-full" v-model="form.date" required />
+                    <InputError class="mt-2" :message="form.errors.date" />
+                </div>
+                <p class="text-xs text-horizon-500">
+                    Conta como saída de caixa, mas não entra nas Saídas de consumo — fica no montante de Investimentos.
                 </p>
             </template>
 

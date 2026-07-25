@@ -51,6 +51,11 @@ const barData = computed(() => ({
             data: props.monthly.map((m) => m.expense),
             backgroundColor: '#ef4444',
         },
+        {
+            label: 'Investimentos',
+            data: props.monthly.map((m) => m.investments || 0),
+            backgroundColor: '#0d9488',
+        },
     ],
 }));
 
@@ -105,7 +110,7 @@ const applyFilters = (event) => {
             </Card>
 
             <Card extra="p-5">
-                <h2 class="mb-4 font-bold text-navy-700">Entradas × saídas (6 meses)</h2>
+                <h2 class="mb-4 font-bold text-navy-700">Entradas × saídas × investimentos (6 meses)</h2>
                 <div class="h-72">
                     <Bar :data="barData" :options="chartOptions" />
                 </div>

@@ -102,6 +102,13 @@ const applyFilters = (event) => {
                 Fluxo de caixa
                 <span class="float-right font-semibold tabular-nums text-navy-700">{{ formatBRL(summary.cash_flow) }}</span>
             </p>
+            <p
+                v-if="summary.investments > 0"
+                class="mt-1.5 text-xs font-medium text-teal-700"
+            >
+                Investimentos
+                <span class="float-right font-semibold tabular-nums">{{ formatBRL(summary.investments) }}</span>
+            </p>
         </div>
 
         <div class="mb-4 hidden gap-4 sm:mb-6 sm:grid sm:grid-cols-3">
@@ -120,6 +127,17 @@ const applyFilters = (event) => {
                 <p class="text-xs text-horizon-500">Dinheiro que saiu da conta neste mês</p>
             </div>
             <p class="text-sm font-bold tabular-nums text-navy-700">{{ formatBRL(summary.cash_flow) }}</p>
+        </div>
+
+        <div
+            v-if="summary.investments > 0"
+            class="mb-4 hidden rounded-[16px] bg-teal-50 px-4 py-2.5 shadow-soft ring-1 ring-teal-100 sm:flex sm:items-center sm:justify-between"
+        >
+            <div>
+                <p class="text-sm font-medium text-teal-800">Investimentos</p>
+                <p class="text-xs text-teal-700/80">Aportes do mês (não entram nas Saídas de consumo)</p>
+            </div>
+            <p class="text-sm font-bold tabular-nums text-teal-900">{{ formatBRL(summary.investments) }}</p>
         </div>
 
         <div

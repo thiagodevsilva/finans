@@ -51,10 +51,17 @@ class ReportController extends Controller
                 ->whereBetween('date', [$pStart->toDateString(), $pEnd->toDateString()])
                 ->sum('amount');
 
+            $investments = Transaction::query()
+                ->where('type', Transaction::TYPE_INVESTMENT)
+                ->where('status', Transaction::STATUS_CONFIRMED)
+                ->whereBetween('date', [$pStart->toDateString(), $pEnd->toDateString()])
+                ->sum('amount');
+
             $monthly[] = [
                 'label' => $period->translatedFormat('M/Y'),
                 'income' => (float) $income,
                 'expense' => (float) $expense,
+                'investments' => (float) $investments,
             ];
         }
 

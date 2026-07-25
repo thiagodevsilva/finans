@@ -147,6 +147,12 @@ class TransactionController extends Controller
             $data['recurring_bill_id']
         );
 
+        if ($data['type'] === Transaction::TYPE_INVESTMENT) {
+            $data['credit_card_invoice_id'] = null;
+            $data['payment_card_id'] = null;
+            $data['recurring_bill_id'] = null;
+        }
+
         if ($recurringBillId && $data['type'] === Transaction::TYPE_EXPENSE) {
             $bill = RecurringBill::query()->findOrFail($recurringBillId);
             $this->recurringBillService->settleForBill($request->user(), $bill, [
@@ -221,6 +227,12 @@ class TransactionController extends Controller
         );
         $data['credit_card_invoice_id'] = $this->resolveInvoiceId($data);
         $data['recurring_bill_id'] = $recurringBillId;
+
+        if ($data['type'] === Transaction::TYPE_INVESTMENT) {
+            $data['credit_card_invoice_id'] = null;
+            $data['payment_card_id'] = null;
+            $data['recurring_bill_id'] = null;
+        }
 
         $transaction->update($data);
 

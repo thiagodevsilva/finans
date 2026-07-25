@@ -27,12 +27,14 @@ const emit = defineEmits(['destroy']);
 const rowClass = (type) => {
     if (type === 'income') return 'tx-row-income';
     if (type === 'transfer') return 'tx-row-transfer';
+    if (type === 'investment') return 'tx-row-investment';
     return 'tx-row-expense';
 };
 
 const amountClass = (type) => {
     if (type === 'income') return 'text-emerald-700';
     if (type === 'transfer') return 'text-slate-700';
+    if (type === 'investment') return 'text-teal-800';
     return 'text-red-700';
 };
 </script>
@@ -53,7 +55,7 @@ const amountClass = (type) => {
                 </div>
                 <p class="shrink-0 text-sm font-bold tabular-nums" :class="amountClass(tx.type)">
                     <template v-if="tx.type === 'income'">+</template>
-                    <template v-else-if="tx.type === 'expense'">-</template>
+                    <template v-else-if="tx.type === 'expense' || tx.type === 'investment'">-</template>
                     <template v-else>→ </template>
                     {{ formatBRL(tx.amount) }}
                 </p>
@@ -135,7 +137,7 @@ const amountClass = (type) => {
                     <td class="px-5 py-3 text-horizon-600">{{ tx.user?.name }}</td>
                     <td class="px-5 py-3 text-right font-bold tabular-nums" :class="amountClass(tx.type)">
                         <template v-if="tx.type === 'income'">+</template>
-                        <template v-else-if="tx.type === 'expense'">-</template>
+                        <template v-else-if="tx.type === 'expense' || tx.type === 'investment'">-</template>
                         <template v-else>→ </template>
                         {{ formatBRL(tx.amount) }}
                     </td>
