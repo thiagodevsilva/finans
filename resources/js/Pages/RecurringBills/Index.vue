@@ -262,31 +262,6 @@ const skip = (item) => {
         </div>
 
         <section class="mb-8">
-            <h2 class="mb-3 text-lg font-bold text-navy-700">A pagar</h2>
-            <div v-if="!upcoming.length" class="rounded-[20px] bg-white px-5 py-8 text-center text-sm text-horizon-500 shadow-soft">
-                Nenhuma conta fixa prevista no horizonte.
-            </div>
-            <div v-else class="space-y-3">
-                <article
-                    v-for="item in upcoming"
-                    :key="item.id"
-                    class="flex flex-wrap items-center justify-between gap-3 rounded-[16px] bg-white px-4 py-3 shadow-soft"
-                >
-                    <div>
-                        <p class="font-semibold text-navy-700">{{ item.description }}</p>
-                        <p class="text-xs text-horizon-500">
-                            {{ formatDate(item.date) }} · {{ item.category?.name }} · Previsto {{ formatBRL(item.amount) }}
-                        </p>
-                    </div>
-                    <div v-if="item.can_edit" class="flex gap-3 text-sm">
-                        <button type="button" class="font-medium text-cta hover:underline" @click="openConfirm(item)">Confirmar</button>
-                        <button type="button" class="font-medium text-horizon-600 hover:underline" @click="skip(item)">Pular</button>
-                    </div>
-                </article>
-            </div>
-        </section>
-
-        <section>
             <h2 class="mb-3 text-lg font-bold text-navy-700">Cadastradas</h2>
             <div v-if="!bills.length" class="rounded-[20px] bg-white px-5 py-8 text-center text-sm text-horizon-500 shadow-soft">
                 Nenhuma conta fixa cadastrada.
@@ -311,6 +286,31 @@ const skip = (item) => {
                     <div v-if="bill.can_edit && bill.active" class="mt-4 flex gap-3 text-sm">
                         <button type="button" class="font-medium text-cta hover:underline" @click="startEdit(bill)">Editar</button>
                         <button type="button" class="font-medium text-red-600 hover:underline" @click="destroy(bill)">Excluir</button>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section>
+            <h2 class="mb-3 text-lg font-bold text-navy-700">A pagar</h2>
+            <div v-if="!upcoming.length" class="rounded-[20px] bg-white px-5 py-8 text-center text-sm text-horizon-500 shadow-soft">
+                Nenhuma conta fixa prevista no horizonte.
+            </div>
+            <div v-else class="space-y-3">
+                <article
+                    v-for="item in upcoming"
+                    :key="item.id"
+                    class="flex flex-wrap items-center justify-between gap-3 rounded-[16px] bg-white px-4 py-3 shadow-soft"
+                >
+                    <div>
+                        <p class="font-semibold text-navy-700">{{ item.description }}</p>
+                        <p class="text-xs text-horizon-500">
+                            {{ formatDate(item.date) }} · {{ item.category?.name }} · Previsto {{ formatBRL(item.amount) }}
+                        </p>
+                    </div>
+                    <div v-if="item.can_edit" class="flex gap-3 text-sm">
+                        <button type="button" class="font-medium text-cta hover:underline" @click="openConfirm(item)">Confirmar</button>
+                        <button type="button" class="font-medium text-horizon-600 hover:underline" @click="skip(item)">Pular</button>
                     </div>
                 </article>
             </div>
