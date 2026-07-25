@@ -1,7 +1,7 @@
 {
   "name": "Levita",
   "short_name": "Levita",
-  "description": "Controle de finanças da família, gastos do dia a dia e orçamento compartilhado.",
+  "description": "App de finanças gratuito e simples para famílias e casais: gastos do dia a dia e orçamento compartilhado.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffc107",

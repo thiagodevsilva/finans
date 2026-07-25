@@ -17,10 +17,48 @@ use Inertia\Inertia;
 
 Route::get('/', fn () => Inertia::render('Landing'))->name('home');
 
+Route::get('/robots.txt', function () {
+    $base = rtrim(url('/'), '/');
+
+    $body = implode("\n", [
+        'User-agent: *',
+        'Allow: /',
+        'Disallow: /dashboard',
+        'Disallow: /transactions',
+        'Disallow: /bank-accounts',
+        'Disallow: /payment-cards',
+        'Disallow: /credit-card-payments',
+        'Disallow: /installment-plans',
+        'Disallow: /recurring-bills',
+        'Disallow: /categories',
+        'Disallow: /members',
+        'Disallow: /reports',
+        'Disallow: /profile',
+        'Disallow: /admin',
+        'Disallow: /login',
+        'Disallow: /register',
+        'Disallow: /forgot-password',
+        'Disallow: /reset-password',
+        'Disallow: /verify-email',
+        'Disallow: /confirm-password',
+        '',
+        'Sitemap: '.$base.'/sitemap.xml',
+        '',
+    ]);
+
+    return response($body, 200)
+        ->header('Content-Type', 'text/plain; charset=UTF-8');
+})->name('robots');
+
 Route::get('/sitemap.xml', function () {
     $base = rtrim(url('/'), '/');
     $urls = [
-        ['loc' => $base.'/', 'changefreq' => 'weekly', 'priority' => '1.0'],
+        [
+            'loc' => $base.'/',
+            'lastmod' => now()->toDateString(),
+            'changefreq' => 'weekly',
+            'priority' => '1.0',
+        ],
     ];
 
     return response()
