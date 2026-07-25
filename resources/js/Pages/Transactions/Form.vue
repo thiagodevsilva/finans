@@ -591,10 +591,10 @@ const submit = () => {
                 </div>
 
                 <div
-                    v-if="form.type === 'expense' && recurringBills.length && !form.is_installment && !form.recurring_transaction_id"
+                    v-if="isEdit && form.type === 'expense' && recurringBills.length && !form.is_installment"
                     class="relative"
                 >
-                    <InputLabel :value="isEdit ? 'Conta fixa' : 'Vincular conta fixa (opcional)'" />
+                    <InputLabel value="Conta fixa" />
                     <template v-if="form.recurring_bill_id && !billPickerOpen">
                         <p class="mt-2 text-sm text-horizon-600">
                             Vinculada: <span class="font-medium text-navy-700">{{ linkedBillLabel }}</span>
