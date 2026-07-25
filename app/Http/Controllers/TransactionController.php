@@ -71,12 +71,38 @@ class TransactionController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $this->authorize('create', Transaction::class);
 
+        $allowedTypes = [
+            Transaction::TYPE_INCOME,
+            Transaction::TYPE_EXPENSE,
+            Transaction::TYPE_TRANSFER,
+            Transaction::TYPE_INVESTMENT,
+        ];
+
+        $type = $request->input('type');
+        if (! in_array($type, $allowedTypes, true)) {
+            $type = null;
+        }
+
+        $paymentCardId = $request->input('payment_card_id');
+        if ($paymentCardId) {
+            $exists = PaymentCard::query()
+                ->whereKey($paymentCardId)
+                ->exists();
+            if (! $exists) {
+                $paymentCardId = null;
+            }
+        }
+
         return Inertia::render('Transactions/Form', [
             'transaction' => null,
+            'defaults' => [
+                'type' => $type,
+                'payment_card_id' => $paymentCardId,
+            ],
             'categories' => Category::query()->orderBy('name')->get(['id', 'name', 'color']),
             'paymentCards' => $this->paymentCardsForForm(),
             'bankAccounts' => $this->bankAccountsForForm(),

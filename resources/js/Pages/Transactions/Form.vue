@@ -10,6 +10,10 @@ import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     transaction: Object,
+    defaults: {
+        type: Object,
+        default: () => ({}),
+    },
     categories: Array,
     paymentCards: {
         type: Array,
@@ -31,11 +35,29 @@ const props = defineProps({
 
 const isEdit = computed(() => !!props.transaction);
 
+const initialType = () => props.transaction?.type || props.defaults?.type || 'expense';
+
 const initialMethod = () => {
     if (props.transaction?.payment_method === 'card' && props.transaction?.payment_card_id) {
         return `card:${props.transaction.payment_card_id}`;
     }
-    return props.transaction?.payment_method || 'cash';
+    if (props.transaction?.payment_method) {
+        return props.transaction.payment_method;
+    }
+    if (initialType() === 'transfer' || initialType() === 'investment') {
+        return 'pix';
+    }
+    return 'cash';
+};
+
+const initialPaymentCardId = () => {
+    if (props.transaction?.payment_card_id) {
+        return props.transaction.payment_card_id;
+    }
+    if (initialType() === 'transfer' && props.defaults?.payment_card_id) {
+        return props.defaults.payment_card_id;
+    }
+    return null;
 };
 
 const initialBillId = props.transaction?.recurring_bill_id || '';
@@ -47,14 +69,14 @@ const initialBillLabel = (() => {
 })();
 
 const form = useForm({
-    type: props.transaction?.type || 'expense',
+    type: initialType(),
     amount: props.transaction?.amount || '',
     description: props.transaction?.description || '',
     category_id: props.transaction?.category_id || '',
     date: props.transaction?.date?.slice?.(0, 10) || props.transaction?.date || new Date().toISOString().slice(0, 10),
     payment_selection: initialMethod(),
-    payment_method: props.transaction?.payment_method || 'cash',
-    payment_card_id: props.transaction?.payment_card_id || null,
+    payment_method: props.transaction?.payment_method || initialMethod(),
+    payment_card_id: initialPaymentCardId(),
     bank_account_id: props.transaction?.bank_account_id || '',
     is_installment: false,
     total_amount: '',
@@ -63,6 +85,14 @@ const form = useForm({
     recurring_transaction_id: '',
     recurring_bill_id: initialBillId,
 });
+
+if (
+    form.type === 'transfer'
+    && !form.payment_card_id
+    && props.paymentCards.filter((c) => c.type === 'credit').length === 1
+) {
+    form.payment_card_id = props.paymentCards.find((c) => c.type === 'credit').id;
+}
 
 const recurringSearch = ref('');
 const recurringOpen = ref(false);

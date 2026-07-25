@@ -34,7 +34,7 @@ const applyFilters = (event) => {
                 <h1 class="text-xl font-bold text-navy-700 sm:text-2xl">Pagamentos de fatura</h1>
                 <Link :href="route('payment-cards.index')" class="text-sm text-cta hover:underline">Voltar aos cartões</Link>
             </div>
-            <Link :href="route('transactions.create')" class="text-sm font-semibold text-cta hover:underline">
+            <Link :href="route('transactions.create', { type: 'transfer' })" class="text-sm font-semibold text-cta hover:underline">
                 Novo pagamento
             </Link>
         </div>

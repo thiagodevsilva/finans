@@ -6,7 +6,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { formatBRL, formatDate } from '@/utils/format';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
     cards: Array,
@@ -26,6 +26,8 @@ const page = usePage();
 const userId = computed(() => page.props.auth.user.id);
 
 const editing = ref(null);
+const showForm = ref(false);
+const formPanel = ref(null);
 
 const form = useForm({
     name: '',
@@ -51,6 +53,30 @@ watch(
     },
 );
 
+const resetFormDefaults = () => {
+    form.reset();
+    form.brand = 'visa';
+    form.type = 'credit';
+    form.color = '#ffc107';
+    form.bank_account_id = '';
+    form.closing_day = 10;
+    form.due_day = 17;
+    form.clearErrors();
+};
+
+const focusForm = async () => {
+    await nextTick();
+    formPanel.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    formPanel.value?.querySelector('input, select')?.focus();
+};
+
+const openCreateForm = () => {
+    editing.value = null;
+    resetFormDefaults();
+    showForm.value = true;
+    focusForm();
+};
+
 const startEdit = (card) => {
     editing.value = card.id;
     form.name = card.name;
@@ -62,17 +88,14 @@ const startEdit = (card) => {
     form.closing_day = card.closing_day || 10;
     form.due_day = card.due_day || 17;
     form.clearErrors();
+    showForm.value = true;
+    focusForm();
 };
 
 const cancelEdit = () => {
     editing.value = null;
-    form.reset();
-    form.brand = 'visa';
-    form.type = 'credit';
-    form.color = '#ffc107';
-    form.bank_account_id = '';
-    form.closing_day = 10;
-    form.due_day = 17;
+    showForm.value = false;
+    resetFormDefaults();
 };
 
 const submit = () => {
@@ -91,15 +114,7 @@ const submit = () => {
         });
     } else {
         form.post(route('payment-cards.store'), {
-            onSuccess: () => {
-                form.reset();
-                form.brand = 'visa';
-                form.type = 'credit';
-                form.color = '#ffc107';
-                form.bank_account_id = '';
-                form.closing_day = 10;
-                form.due_day = 17;
-            },
+            onSuccess: () => cancelEdit(),
         });
     }
 };
@@ -108,6 +123,8 @@ const destroy = (card) => {
     if (!confirm(`Excluir o cartão "${card.name}"?`)) return;
     router.delete(route('payment-cards.destroy', card.id));
 };
+
+const payInvoiceHref = route('transactions.create', { type: 'transfer' });
 </script>
 
 <template>
@@ -119,18 +136,27 @@ const destroy = (card) => {
                 <h1 class="text-2xl font-bold text-navy-700">Cartões</h1>
                 <p class="text-sm text-horizon-500">Cadastre cartões e acompanhe pagamentos de fatura</p>
             </div>
-            <Link
-                :href="route('transactions.create')"
-                class="text-sm font-semibold text-cta hover:underline"
-            >
-                Pagar fatura
-            </Link>
+            <div class="flex flex-wrap items-center gap-3">
+                <Link :href="payInvoiceHref" class="text-sm font-semibold text-cta hover:underline">
+                    Pagar fatura
+                </Link>
+                <PrimaryButton v-if="!showForm" type="button" @click="openCreateForm">
+                    Adicionar cartão
+                </PrimaryButton>
+            </div>
         </div>
 
         <form
-            class="mb-8 grid max-w-4xl gap-3 rounded-[20px] bg-white p-5 shadow-soft sm:grid-cols-2 lg:grid-cols-3"
+            v-if="showForm"
+            ref="formPanel"
+            class="mb-8 grid max-w-4xl scroll-mt-4 gap-3 rounded-[20px] bg-white p-5 shadow-soft sm:grid-cols-2 lg:grid-cols-3"
             @submit.prevent="submit"
         >
+            <div class="lg:col-span-3">
+                <h2 class="text-base font-bold text-navy-700">
+                    {{ editing ? 'Editar cartão' : 'Novo cartão' }}
+                </h2>
+            </div>
             <div class="lg:col-span-2">
                 <InputLabel value="Nome do cartão" />
                 <TextInput class="mt-1 block w-full" v-model="form.name" placeholder="Ex.: Nubank Roxinho" required />
@@ -190,12 +216,20 @@ const destroy = (card) => {
             </template>
             <div class="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
                 <PrimaryButton :disabled="form.processing">{{ editing ? 'Salvar' : 'Adicionar cartão' }}</PrimaryButton>
-                <button v-if="editing" type="button" class="text-sm text-horizon-600 underline" @click="cancelEdit">Cancelar</button>
+                <button type="button" class="text-sm text-horizon-600 underline" @click="cancelEdit">Cancelar</button>
             </div>
         </form>
 
         <div v-if="!cards.length" class="rounded-[20px] bg-white px-5 py-12 text-center text-horizon-500 shadow-soft">
             Nenhum cartão cadastrado ainda.
+            <button
+                v-if="!showForm"
+                type="button"
+                class="mt-2 block w-full text-cta hover:underline"
+                @click="openCreateForm"
+            >
+                Adicionar o primeiro cartão
+            </button>
         </div>
 
         <div v-else class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -253,7 +287,7 @@ const destroy = (card) => {
             </div>
             <div v-if="!recentPayments.length" class="rounded-[16px] bg-white px-4 py-8 text-center text-sm text-horizon-500 shadow-soft">
                 Nenhum pagamento de fatura ainda.
-                <Link :href="route('transactions.create')" class="mt-1 block text-cta hover:underline">Registrar pagamento</Link>
+                <Link :href="payInvoiceHref" class="mt-1 block text-cta hover:underline">Registrar pagamento</Link>
             </div>
             <ul v-else class="divide-y divide-horizon-100 rounded-[16px] bg-white px-4 shadow-soft">
                 <li
