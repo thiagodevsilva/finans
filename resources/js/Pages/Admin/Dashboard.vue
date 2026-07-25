@@ -17,6 +17,7 @@ ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 const props = defineProps({
     onlineCount: Number,
     totalUsers: Number,
+    users: Object,
     signupsChart: Object,
     filters: Object,
     onlineWindowMinutes: Number,
@@ -114,6 +115,56 @@ const logout = () => {
                 <h2 class="mb-3 text-sm font-bold">Entrada de usuários</h2>
                 <div class="h-56 sm:h-72">
                     <Bar :data="chartData" :options="chartOptions" />
+                </div>
+            </section>
+
+            <section class="rounded-[16px] bg-white p-4 shadow-soft">
+                <h2 class="mb-3 text-sm font-bold">Usuários</h2>
+
+                <div v-if="!users?.data?.length" class="py-8 text-center text-sm text-horizon-500">
+                    Nenhum usuário cadastrado ainda.
+                </div>
+
+                <div v-else class="overflow-x-auto">
+                    <table class="min-w-full text-left text-sm">
+                        <thead>
+                            <tr class="border-b border-horizon-100 text-xs font-semibold uppercase tracking-wide text-horizon-500">
+                                <th class="px-2 py-2 font-semibold">Nome</th>
+                                <th class="px-2 py-2 font-semibold">E-mail</th>
+                                <th class="px-2 py-2 font-semibold">Família</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr
+                                v-for="row in users.data"
+                                :key="row.id"
+                                class="border-b border-horizon-50 last:border-0"
+                            >
+                                <td class="px-2 py-2.5 font-medium text-navy-700">{{ row.name }}</td>
+                                <td class="px-2 py-2.5 text-horizon-600">{{ row.email }}</td>
+                                <td class="px-2 py-2.5 text-horizon-600">
+                                    {{ row.family_name || '—' }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div
+                    v-if="users?.links?.length > 3"
+                    class="mt-4 flex flex-wrap gap-2"
+                >
+                    <Link
+                        v-for="link in users.links"
+                        :key="link.label"
+                        :href="link.url || '#'"
+                        class="rounded-lg border px-2.5 py-1 text-xs"
+                        :class="link.active
+                            ? 'border-cta bg-cta text-white'
+                            : 'border-horizon-200 bg-white text-navy-700'"
+                        :preserve-scroll="true"
+                        v-html="link.label"
+                    />
                 </div>
             </section>
         </main>

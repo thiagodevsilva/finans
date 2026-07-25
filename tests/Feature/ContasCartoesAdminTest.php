@@ -291,6 +291,27 @@ class ContasCartoesAdminTest extends TestCase
             );
     }
 
+    public function test_admin_dashboard_lists_users_with_family_name(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $account = Account::factory()->create(['name' => 'Família Silva']);
+        User::factory()->owner()->create([
+            'account_id' => $account->id,
+            'name' => 'João Silva',
+            'email' => 'joao@example.com',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('users.data', 1)
+                ->where('users.data.0.name', 'João Silva')
+                ->where('users.data.0.email', 'joao@example.com')
+                ->where('users.data.0.family_name', 'Família Silva')
+            );
+    }
+
     public function test_expense_can_be_converted_to_invoice_payment_on_edit(): void
     {
         $account = Account::factory()->create();

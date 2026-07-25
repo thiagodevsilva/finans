@@ -35,12 +35,28 @@ class AdminDashboardController extends Controller
 
         $onlineThreshold = now()->subMinutes(User::ONLINE_MINUTES);
 
+        $users = User::query()
+            ->with('account:id,name')
+            ->where('is_admin', false)
+            ->orderByDesc('created_at')
+            ->paginate(50)
+            ->withQueryString()
+            ->through(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'family_name' => $user->account?->name,
+                'created_at' => $user->created_at?->toDateString(),
+            ]);
+
         return Inertia::render('Admin/Dashboard', [
             'onlineCount' => User::query()
                 ->where('is_admin', false)
                 ->where('last_seen_at', '>=', $onlineThreshold)
                 ->count(),
             'totalUsers' => User::query()->where('is_admin', false)->count(),
+            'users' => $users,
             'signupsChart' => [
                 'labels' => $labels,
                 'data' => $counts,
