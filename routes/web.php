@@ -17,14 +17,14 @@ use Inertia\Inertia;
 Route::get('/', fn () => Inertia::render('Landing'))->name('home');
 
 Route::get('/sitemap.xml', function () {
-    $base = rtrim(config('app.url'), '/');
+    $base = rtrim(url('/'), '/');
     $urls = [
         ['loc' => $base.'/', 'changefreq' => 'weekly', 'priority' => '1.0'],
     ];
 
-    $xml = view('sitemap', ['urls' => $urls])->render();
-
-    return response($xml, 200)->header('Content-Type', 'application/xml');
+    return response()
+        ->view('sitemap', ['urls' => $urls], 200)
+        ->header('Content-Type', 'application/xml; charset=UTF-8');
 })->name('sitemap');
 
 Route::middleware(['auth', 'last.seen'])->group(function () {
