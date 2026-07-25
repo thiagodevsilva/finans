@@ -18,12 +18,16 @@ class User extends Authenticatable
 
     public const ROLE_DEPENDENT = 'dependent';
 
+    public const ONLINE_MINUTES = 29;
+
     protected $fillable = [
         'account_id',
         'name',
         'email',
         'password',
         'role',
+        'is_admin',
+        'last_seen_at',
     ];
 
     protected $hidden = [
@@ -34,6 +38,8 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'is_admin' => 'boolean',
+        'last_seen_at' => 'datetime',
     ];
 
     protected $appends = [
@@ -58,5 +64,16 @@ class User extends Authenticatable
     public function getIsOwnerAttribute(): bool
     {
         return $this->isOwner();
+    }
+
+    public function isAdmin(): bool
+    {
+        return (bool) $this->is_admin;
+    }
+
+    public function isOnline(): bool
+    {
+        return $this->last_seen_at !== null
+            && $this->last_seen_at->gte(now()->subMinutes(self::ONLINE_MINUTES));
     }
 }

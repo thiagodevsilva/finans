@@ -10,16 +10,19 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignUuid('account_id')->constrained('accounts')->cascadeOnDelete();
+            $table->foreignUuid('account_id')->nullable()->constrained('accounts')->nullOnDelete();
             $table->string('name');
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->string('role')->default('owner'); // owner | dependent
+            $table->boolean('is_admin')->default(false);
             $table->rememberToken();
+            $table->timestamp('last_seen_at')->nullable();
             $table->timestamps();
 
             $table->index('account_id');
+            $table->index('is_admin');
         });
     }
 

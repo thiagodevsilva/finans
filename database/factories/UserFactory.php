@@ -24,6 +24,8 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'role' => User::ROLE_OWNER,
+            'is_admin' => false,
+            'last_seen_at' => null,
             'remember_token' => Str::random(10),
         ];
     }
@@ -36,6 +38,15 @@ class UserFactory extends Factory
     public function dependent(): static
     {
         return $this->state(fn () => ['role' => User::ROLE_DEPENDENT]);
+    }
+
+    public function admin(): static
+    {
+        return $this->state(fn () => [
+            'is_admin' => true,
+            'account_id' => null,
+            'role' => User::ROLE_OWNER,
+        ]);
     }
 
     public function unverified(): static

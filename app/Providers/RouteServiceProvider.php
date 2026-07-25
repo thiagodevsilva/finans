@@ -30,9 +30,11 @@ class RouteServiceProvider extends ServiceProvider
         });
 
         Route::bind('member', function (string $value) {
+            $accountId = auth()->user()?->account_id;
+
             return User::query()
                 ->whereKey($value)
-                ->where('account_id', auth()->user()->account_id)
+                ->when($accountId, fn ($q) => $q->where('account_id', $accountId))
                 ->firstOrFail();
         });
 
