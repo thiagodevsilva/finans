@@ -2,6 +2,7 @@
 import AppLayout from '@/Layouts/AppLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
+import MoneyInput from '@/Components/MoneyInput.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { formatCardLabel } from '@/utils/format';
@@ -43,7 +44,7 @@ const submit = () => form.post(route('installment-plans.store'));
             </div>
             <div>
                 <InputLabel value="Valor total (R$)" />
-                <TextInput type="number" step="0.01" min="0.01" class="mt-1 block w-full" v-model="form.total_amount" required />
+                <MoneyInput class="mt-1" v-model="form.total_amount" required />
                 <InputError class="mt-1" :message="form.errors.total_amount" />
             </div>
             <div>

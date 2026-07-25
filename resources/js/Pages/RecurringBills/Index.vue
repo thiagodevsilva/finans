@@ -2,6 +2,7 @@
 import AppLayout from '@/Layouts/AppLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
+import MoneyInput from '@/Components/MoneyInput.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { PAYMENT_METHODS, formatBRL, formatCardLabel, formatDate } from '@/utils/format';
@@ -172,7 +173,7 @@ const skip = (item) => {
             </div>
             <div>
                 <InputLabel value="Valor estimado (R$)" />
-                <TextInput type="number" step="0.01" min="0.01" class="mt-1 block w-full" v-model="form.estimated_amount" required />
+                <MoneyInput class="mt-1" v-model="form.estimated_amount" required />
                 <InputError class="mt-1" :message="form.errors.estimated_amount" />
             </div>
             <div>
@@ -246,7 +247,7 @@ const skip = (item) => {
             <form class="mt-4 space-y-3" @submit.prevent="submitConfirm">
                 <div>
                     <InputLabel value="Valor real (R$)" />
-                    <TextInput type="number" step="0.01" min="0.01" class="mt-1 block w-full" v-model="confirmForm.amount" required />
+                    <MoneyInput class="mt-1" v-model="confirmForm.amount" required />
                     <InputError class="mt-1" :message="confirmForm.errors.amount" />
                 </div>
                 <div>

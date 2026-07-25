@@ -2,6 +2,7 @@
 import AppLayout from '@/Layouts/AppLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
+import MoneyInput from '@/Components/MoneyInput.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { PAYMENT_METHODS, formatCardLabel, formatBRL } from '@/utils/format';
@@ -445,7 +446,7 @@ const submit = () => {
                 </div>
                 <div>
                     <InputLabel for="amount" value="Valor (R$)" />
-                    <TextInput id="amount" type="number" step="0.01" min="0.01" class="mt-1 block w-full" v-model="form.amount" required />
+                    <MoneyInput id="amount" class="mt-1" v-model="form.amount" required />
                     <InputError class="mt-2" :message="form.errors.amount" />
                 </div>
                 <div>
@@ -464,7 +465,7 @@ const submit = () => {
             <template v-else-if="isInvestment">
                 <div>
                     <InputLabel for="amount" value="Valor (R$)" />
-                    <TextInput id="amount" type="number" step="0.01" min="0.01" class="mt-1 block w-full" v-model="form.amount" required />
+                    <MoneyInput id="amount" class="mt-1" v-model="form.amount" required />
                     <InputError class="mt-2" :message="form.errors.amount" />
                 </div>
                 <div>
@@ -587,7 +588,7 @@ const submit = () => {
 
                 <div v-if="!form.is_installment">
                     <InputLabel for="amount" value="Valor (R$)" />
-                    <TextInput id="amount" type="number" step="0.01" min="0.01" class="mt-1 block w-full" v-model="form.amount" required />
+                    <MoneyInput id="amount" class="mt-1" v-model="form.amount" required />
                     <InputError class="mt-2" :message="form.errors.amount" />
                 </div>
 
@@ -659,15 +660,12 @@ const submit = () => {
                 <div v-if="form.is_installment" class="space-y-4 rounded-lg bg-amber-50/60 p-4 ring-1 ring-amber-100">
                     <div>
                         <InputLabel for="total_amount" value="Valor total (R$)" />
-                        <TextInput
+                        <MoneyInput
                             id="total_amount"
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            class="mt-1 block w-full"
+                            class="mt-1"
                             v-model="form.total_amount"
                             required
-                            @input="installmentSource = 'total'"
+                            @update:model-value="installmentSource = 'total'"
                         />
                         <InputError class="mt-2" :message="form.errors.total_amount" />
                     </div>
@@ -686,14 +684,11 @@ const submit = () => {
                     </div>
                     <div>
                         <InputLabel for="installment_amount" value="Valor da parcela (R$)" />
-                        <TextInput
+                        <MoneyInput
                             id="installment_amount"
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            class="mt-1 block w-full"
+                            class="mt-1"
                             v-model="form.installment_amount"
-                            @input="installmentSource = 'parcel'"
+                            @update:model-value="installmentSource = 'parcel'"
                         />
                         <InputError class="mt-2" :message="form.errors.installment_amount" />
                     </div>
