@@ -10,7 +10,6 @@ import { useAppTour } from '@/Composables/useAppTour';
 import { useTourDemo } from '@/Composables/useTourDemo';
 import { TRANSACTIONS_TOUR_ID } from '@/tours/transactions';
 import TourDemoBanner from '@/Components/TourDemoBanner.vue';
-import TourHelpButton from '@/Components/TourHelpButton.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, onMounted, ref, watch } from 'vue';
 
@@ -432,12 +431,9 @@ const submit = () => {
     <AppLayout>
         <TourDemoBanner :show="showingDemo" />
 
-        <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
-            <div>
-                <h1 class="text-2xl font-bold text-slate-900">{{ isEdit ? 'Editar transação' : 'Nova transação' }}</h1>
-                <Link :href="route('transactions.index')" class="text-sm text-cta hover:underline">Voltar</Link>
-            </div>
-            <TourHelpButton v-if="!isEdit" :tour-id="TRANSACTIONS_TOUR_ID" />
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold text-slate-900">{{ isEdit ? 'Editar transação' : 'Nova transação' }}</h1>
+            <Link :href="route('transactions.index')" class="text-sm text-cta hover:underline">Voltar</Link>
         </div>
 
         <form class="max-w-xl space-y-4 rounded-lg bg-white p-6 shadow-sm ring-1 ring-slate-200" @submit.prevent="submit">

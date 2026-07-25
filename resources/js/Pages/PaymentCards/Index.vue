@@ -6,7 +6,6 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { formatBRL, formatDate } from '@/utils/format';
 import { useAppTour } from '@/Composables/useAppTour';
-import TourHelpButton from '@/Components/TourHelpButton.vue';
 import { FIRST_SETUP_TOUR_ID } from '@/tours/firstSetup';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
@@ -158,7 +157,6 @@ onMounted(async () => {
                 <p class="text-sm text-horizon-500">Cadastre cartões e acompanhe pagamentos de fatura</p>
             </div>
             <div class="flex flex-wrap items-center gap-3">
-                <TourHelpButton :tour-id="FIRST_SETUP_TOUR_ID" />
                 <Link :href="payInvoiceHref" class="text-sm font-semibold text-cta hover:underline">
                     Pagar fatura
                 </Link>

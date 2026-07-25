@@ -1,5 +1,6 @@
 <script setup>
 import AppMark from '@/Components/AppMark.vue';
+import TourHelpButton from '@/Components/TourHelpButton.vue';
 import { useAppTour } from '@/Composables/useAppTour';
 import { computed, ref } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
@@ -99,7 +100,9 @@ const replayGuide = () => {
                     <AppMark :size="28" />
                     Levita
                 </span>
-                <span class="w-14" />
+                <div class="flex min-w-[3.5rem] justify-end">
+                    <TourHelpButton compact />
+                </div>
             </header>
 
             <main class="mx-auto w-full max-w-7xl flex-1 px-3 pb-8 pt-2 sm:px-6 lg:px-8 xl:pt-6">

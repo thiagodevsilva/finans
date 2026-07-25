@@ -13,7 +13,7 @@ Espelhado em `resources/js/tours/*.js` + registry em `resources/js/tours/registr
 - Progresso ativo: `sessionStorage` (`levita.tour.active`, `levita.tour.step`).
 - `first-setup` grava `users.onboarding_status` (`completed` / `skipped` / `null`).
 - Tours de tela (`dashboard`, `transactions`) **não** alteram `onboarding_status`.
-- Entrada por tela: botão **Ajuda nesta tela** (`TourHelpButton`).
+- Entrada por tela: botão **Ajuda** no header mobile do `AppLayout` (à direita do nome Levita); resolve o tour pela rota atual.
 - Reabrir guia Contas/Cartões: Sidebar / Perfil → **Refazer guia**.
 
 ## Tours disponíveis

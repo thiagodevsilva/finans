@@ -3,7 +3,6 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import Card from '@/Components/Card.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TourDemoBanner from '@/Components/TourDemoBanner.vue';
-import TourHelpButton from '@/Components/TourHelpButton.vue';
 import TransactionList from '@/Components/TransactionList.vue';
 import { useAppTour } from '@/Composables/useAppTour';
 import { useTourDemo } from '@/Composables/useTourDemo';
@@ -88,7 +87,6 @@ onMounted(() => {
                 <p class="text-sm text-horizon-500">Todas as movimentações da conta</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <TourHelpButton :tour-id="TRANSACTIONS_TOUR_ID" />
                 <Link :href="route('transactions.create')" data-tour="tx-add">
                     <PrimaryButton>Adicionar</PrimaryButton>
                 </Link>

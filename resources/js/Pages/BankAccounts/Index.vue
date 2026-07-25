@@ -5,7 +5,6 @@ import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { useAppTour } from '@/Composables/useAppTour';
-import TourHelpButton from '@/Components/TourHelpButton.vue';
 import { FIRST_SETUP_TOUR_ID } from '@/tours/firstSetup';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
@@ -74,14 +73,11 @@ const destroy = (bankAccount) => {
     <Head title="Contas" />
 
     <AppLayout>
-        <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
-            <div data-tour="ba-page">
-                <h1 class="text-2xl font-bold text-navy-700">Contas</h1>
-                <p class="text-sm text-horizon-500">
-                    Contas bancárias opcionais para vincular entradas e, se quiser, cartões
-                </p>
-            </div>
-            <TourHelpButton :tour-id="FIRST_SETUP_TOUR_ID" />
+        <div class="mb-6" data-tour="ba-page">
+            <h1 class="text-2xl font-bold text-navy-700">Contas</h1>
+            <p class="text-sm text-horizon-500">
+                Contas bancárias opcionais para vincular entradas e, se quiser, cartões
+            </p>
         </div>
 
         <form

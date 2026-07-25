@@ -9,6 +9,11 @@ const props = defineProps({
         type: String,
         default: null,
     },
+    /** Versão compacta para o header mobile */
+    compact: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const { startTour, isTourActive } = useAppTour();
@@ -28,9 +33,11 @@ const start = () => {
     <button
         v-if="canShow"
         type="button"
-        class="inline-flex items-center gap-1.5 rounded-xl border border-horizon-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-700 shadow-sm hover:bg-horizon-50 sm:text-sm"
+        :class="compact
+            ? 'rounded-xl bg-white px-3 py-2 text-sm font-semibold text-navy-700 shadow-soft'
+            : 'inline-flex items-center gap-1.5 rounded-xl border border-horizon-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-700 shadow-sm hover:bg-horizon-50 sm:text-sm'"
         @click="start"
     >
-        Ajuda nesta tela
+        {{ compact ? 'Ajuda' : 'Ajuda nesta tela' }}
     </button>
 </template>

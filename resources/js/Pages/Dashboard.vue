@@ -4,7 +4,6 @@ import Card from '@/Components/Card.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import StatWidget from '@/Components/StatWidget.vue';
 import TourDemoBanner from '@/Components/TourDemoBanner.vue';
-import TourHelpButton from '@/Components/TourHelpButton.vue';
 import TransactionList from '@/Components/TransactionList.vue';
 import WelcomeOnboardingModal from '@/Components/WelcomeOnboardingModal.vue';
 import { useAppTour } from '@/Composables/useAppTour';
@@ -137,7 +136,6 @@ onMounted(() => {
                 <p class="hidden text-sm text-horizon-500 sm:block">Resumo do mês selecionado</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <TourHelpButton :tour-id="DASHBOARD_TOUR_ID" />
                 <form class="flex gap-2" data-tour="dash-period" @change="applyFilters">
                     <select name="month" class="rounded-xl border-horizon-200 py-1.5 text-xs text-navy-700 sm:text-sm" :value="filters.month">
                         <option v-for="m in MONTHS" :key="m.value" :value="m.value">{{ m.label }}</option>
