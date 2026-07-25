@@ -34,6 +34,8 @@ const form = useForm({
     bank_account_id: '',
     start_date: new Date().toISOString().slice(0, 10),
     end_date: '',
+    propagate: 'none',
+    propagate_from: new Date().toISOString().slice(0, 10),
 });
 
 const confirmForm = useForm({
@@ -63,6 +65,8 @@ const resetForm = () => {
     form.payment_selection = 'pix';
     form.payment_method = 'pix';
     form.start_date = new Date().toISOString().slice(0, 10);
+    form.propagate = 'none';
+    form.propagate_from = new Date().toISOString().slice(0, 10);
 };
 
 const openCreateForm = () => {
@@ -72,6 +76,8 @@ const openCreateForm = () => {
     form.payment_selection = 'pix';
     form.payment_method = 'pix';
     form.start_date = new Date().toISOString().slice(0, 10);
+    form.propagate = 'none';
+    form.propagate_from = new Date().toISOString().slice(0, 10);
     form.clearErrors();
     showForm.value = true;
 };
@@ -89,12 +95,20 @@ const startEdit = (bill) => {
     form.bank_account_id = bill.bank_account_id || '';
     form.start_date = bill.start_date;
     form.end_date = bill.end_date || '';
+    form.propagate = 'none';
+    form.propagate_from = new Date().toISOString().slice(0, 10);
     form.clearErrors();
 };
 
 const submit = () => {
     if (!form.bank_account_id) form.bank_account_id = null;
     if (!form.end_date) form.end_date = null;
+    if (!editing.value) {
+        form.propagate = 'none';
+        form.propagate_from = null;
+    } else if (form.propagate !== 'from_date') {
+        form.propagate_from = null;
+    }
 
     if (editing.value) {
         form.put(route('recurring-bills.update', editing.value), {
@@ -108,7 +122,7 @@ const submit = () => {
 };
 
 const destroy = (bill) => {
-    if (!confirm(`Desativar "${bill.description}"?`)) return;
+    if (!confirm(`Excluir "${bill.description}"? Contas sem histórico serão removidas.`)) return;
     router.delete(route('recurring-bills.destroy', bill.id));
 };
 
@@ -198,6 +212,29 @@ const skip = (item) => {
                 <TextInput type="date" class="mt-1 block w-full" v-model="form.end_date" />
                 <InputError class="mt-1" :message="form.errors.end_date" />
             </div>
+            <div v-if="editing" class="sm:col-span-2 space-y-2 rounded-xl border border-horizon-200 bg-white p-3">
+                <InputLabel value="Ao salvar, atualizar lançamentos pendentes?" />
+                <div class="space-y-2 text-sm text-navy-700">
+                    <label class="flex items-center gap-2">
+                        <input v-model="form.propagate" type="radio" value="none" class="text-brand-500 focus:ring-brand-500" />
+                        Só o cadastro
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input v-model="form.propagate" type="radio" value="open" class="text-brand-500 focus:ring-brand-500" />
+                        Atualizar todos os pendentes em aberto
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input v-model="form.propagate" type="radio" value="from_date" class="text-brand-500 focus:ring-brand-500" />
+                        Atualizar a partir de uma data
+                    </label>
+                </div>
+                <div v-if="form.propagate === 'from_date'" class="pt-1">
+                    <InputLabel value="A partir de" />
+                    <TextInput type="date" class="mt-1 block w-full max-w-xs" v-model="form.propagate_from" required />
+                    <InputError class="mt-1" :message="form.errors.propagate_from" />
+                </div>
+                <InputError class="mt-1" :message="form.errors.propagate" />
+            </div>
             <div class="flex items-end gap-2 sm:col-span-2">
                 <PrimaryButton :disabled="form.processing">{{ editing ? 'Salvar' : 'Adicionar conta fixa' }}</PrimaryButton>
                 <button type="button" class="text-sm text-horizon-600 underline" @click="resetForm">Cancelar</button>
@@ -272,7 +309,7 @@ const skip = (item) => {
                     </div>
                     <div v-if="bill.can_edit && bill.active" class="mt-4 flex gap-3 text-sm">
                         <button type="button" class="font-medium text-cta hover:underline" @click="startEdit(bill)">Editar</button>
-                        <button type="button" class="font-medium text-red-600 hover:underline" @click="destroy(bill)">Desativar</button>
+                        <button type="button" class="font-medium text-red-600 hover:underline" @click="destroy(bill)">Excluir</button>
                     </div>
                 </article>
             </div>

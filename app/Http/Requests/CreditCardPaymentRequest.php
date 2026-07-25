@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Transaction;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,10 +16,19 @@ class CreditCardPaymentRequest extends FormRequest
     public function rules(): array
     {
         $accountId = $this->user()->account_id;
+        $needsBank = in_array($this->input('payment_method'), [
+            Transaction::PAYMENT_PIX,
+            Transaction::PAYMENT_TRANSFER,
+        ], true);
 
         return [
-            'bank_account_id' => [
+            'payment_method' => [
                 'required',
+                Rule::in(Transaction::PAYMENT_METHODS),
+            ],
+            'bank_account_id' => [
+                Rule::requiredIf($needsBank),
+                'nullable',
                 'uuid',
                 Rule::exists('bank_accounts', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
             ],
@@ -28,9 +38,25 @@ class CreditCardPaymentRequest extends FormRequest
         ];
     }
 
+    protected function prepareForValidation(): void
+    {
+        $needsBank = in_array($this->input('payment_method'), [
+            Transaction::PAYMENT_PIX,
+            Transaction::PAYMENT_TRANSFER,
+        ], true);
+
+        $this->merge([
+            'bank_account_id' => $needsBank && $this->filled('bank_account_id')
+                ? $this->input('bank_account_id')
+                : null,
+            'description' => $this->filled('description') ? $this->input('description') : null,
+        ]);
+    }
+
     public function attributes(): array
     {
         return [
+            'payment_method' => 'forma de pagamento',
             'bank_account_id' => 'conta bancária',
             'amount' => 'valor',
             'date' => 'data',

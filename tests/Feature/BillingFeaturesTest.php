@@ -61,6 +61,7 @@ class BillingFeaturesTest extends TestCase
 
         $this->actingAs($owner)
             ->post(route('credit-card-invoices.pay', $invoice), [
+                'payment_method' => Transaction::PAYMENT_PIX,
                 'bank_account_id' => $bank->id,
                 'amount' => 50,
                 'date' => '2026-07-17',
@@ -73,7 +74,13 @@ class BillingFeaturesTest extends TestCase
             ->first();
 
         $this->assertNotNull($payment);
-        $this->assertNull($payment->category_id);
+        $this->assertNotNull($payment->category_id);
+        $categoryName = Category::withoutGlobalScopes()->find($payment->category_id)?->name;
+        $this->assertSame('Fatura cartão', $categoryName);
+        $this->assertStringStartsWith('Pagamento de fatura · Nubank', $payment->description);
+
+        // Competência: compra no crédito. Caixa: pagamento da fatura. Pagamento não é despesa.
+        $this->travelTo('2026-07-20');
 
         $response = $this->actingAs($owner)->get(route('dashboard', [
             'month' => 7,
@@ -83,8 +90,209 @@ class BillingFeaturesTest extends TestCase
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
             ->where('summary.expense', 50)
+            ->where('summary.cash_flow', 50)
+            ->where('summary.balance', -50)
             ->where('summary.income', 0)
+            ->where('invoiceSummary.current', 0)
         );
+    }
+
+    public function test_dashboard_separates_accrual_from_cash_and_future_invoices(): void
+    {
+        $this->travelTo('2026-07-25');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+        $bank = BankAccount::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'Conta',
+            'color' => '#2563eb',
+        ]);
+        $card = PaymentCard::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'NuBank',
+            'brand' => 'mastercard',
+            'type' => 'credit',
+            'last_four' => '1234',
+            'color' => '#820ad1',
+            'closing_day' => 10,
+            'due_day' => 17,
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_EXPENSE,
+                'amount' => 457,
+                'description' => 'Conta de Luz',
+                'category_id' => $category->id,
+                'date' => '2026-07-24',
+                'payment_method' => Transaction::PAYMENT_PIX,
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($owner)
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_EXPENSE,
+                'amount' => 15,
+                'description' => 'Bolacha',
+                'category_id' => $category->id,
+                'date' => '2026-07-01',
+                'payment_method' => Transaction::PAYMENT_CARD,
+                'payment_card_id' => $card->id,
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($owner)
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_EXPENSE,
+                'amount' => 10,
+                'description' => 'Chocolate',
+                'category_id' => $category->id,
+                'date' => '2026-07-25',
+                'payment_method' => Transaction::PAYMENT_CARD,
+                'payment_card_id' => $card->id,
+            ])
+            ->assertRedirect();
+
+        $bolacha = Transaction::withoutGlobalScopes()->where('description', 'Bolacha')->first();
+        $chocolate = Transaction::withoutGlobalScopes()->where('description', 'Chocolate')->first();
+        $currentInvoice = CreditCardInvoice::withoutGlobalScopes()->find($bolacha->credit_card_invoice_id);
+        $futureInvoice = CreditCardInvoice::withoutGlobalScopes()->find($chocolate->credit_card_invoice_id);
+
+        $this->assertSame('2026-07-10', $currentInvoice->closing_date->toDateString());
+        $this->assertSame('2026-08-10', $futureInvoice->closing_date->toDateString());
+
+        $this->actingAs($owner)
+            ->post(route('credit-card-invoices.pay', $currentInvoice), [
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'bank_account_id' => $bank->id,
+                'amount' => 1000,
+                'date' => '2026-07-25',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 7, 'year' => 2026]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('summary.expense', 482)
+                ->where('summary.cash_flow', 1457)
+                ->where('summary.balance', -482)
+                ->where('invoiceSummary.current', 0)
+                ->where('invoiceSummary.future', 10)
+            );
+    }
+
+    public function test_purchase_on_closing_day_belongs_to_next_invoice(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+        $card = PaymentCard::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'Visa',
+            'brand' => 'visa',
+            'type' => 'credit',
+            'color' => '#ffc107',
+            'closing_day' => 10,
+            'due_day' => 17,
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_EXPENSE,
+                'amount' => 20,
+                'description' => 'No fechamento',
+                'category_id' => $category->id,
+                'date' => '2026-07-10',
+                'payment_method' => Transaction::PAYMENT_CARD,
+                'payment_card_id' => $card->id,
+            ])
+            ->assertRedirect();
+
+        $expense = Transaction::withoutGlobalScopes()->where('description', 'No fechamento')->first();
+        $invoice = CreditCardInvoice::withoutGlobalScopes()->find($expense->credit_card_invoice_id);
+
+        $this->assertSame('2026-08-10', $invoice->closing_date->toDateString());
+    }
+
+    public function test_partial_invoice_payments_are_allowed_same_month(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+        $bank = BankAccount::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'Conta',
+            'color' => '#2563eb',
+        ]);
+        $card = PaymentCard::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'NuBank',
+            'brand' => 'mastercard',
+            'type' => 'credit',
+            'color' => '#820ad1',
+            'closing_day' => 10,
+            'due_day' => 17,
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_EXPENSE,
+                'amount' => 100,
+                'description' => 'Compra',
+                'category_id' => $category->id,
+                'date' => '2026-07-05',
+                'payment_method' => Transaction::PAYMENT_CARD,
+                'payment_card_id' => $card->id,
+            ])
+            ->assertRedirect();
+
+        $invoice = CreditCardInvoice::withoutGlobalScopes()
+            ->where('payment_card_id', $card->id)
+            ->first();
+
+        $this->actingAs($owner)
+            ->post(route('credit-card-invoices.pay', $invoice), [
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'bank_account_id' => $bank->id,
+                'amount' => 40,
+                'date' => '2026-07-18',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($owner)
+            ->post(route('credit-card-invoices.pay', $invoice), [
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'bank_account_id' => $bank->id,
+                'amount' => 60,
+                'date' => '2026-07-20',
+            ])
+            ->assertRedirect();
+
+        $payments = Transaction::withoutGlobalScopes()
+            ->where('type', Transaction::TYPE_TRANSFER)
+            ->where('credit_card_invoice_id', $invoice->id)
+            ->orderBy('date')
+            ->get();
+
+        $this->assertCount(2, $payments);
+        $this->assertEquals(40, (float) $payments[0]->amount);
+        $this->assertEquals(60, (float) $payments[1]->amount);
+        $this->assertSame(
+            Category::withoutGlobalScopes()->find($payments[0]->category_id)?->name,
+            Category::withoutGlobalScopes()->find($payments[1]->category_id)?->name
+        );
+        $this->assertSame('Fatura cartão', Category::withoutGlobalScopes()->find($payments[0]->category_id)?->name);
+
+        $invoice->refresh();
+        $this->assertSame(CreditCardInvoice::STATUS_PAID, $invoice->status);
     }
 
     public function test_installment_plan_creates_monthly_expenses_with_cent_adjustment(): void
@@ -290,6 +498,7 @@ class BillingFeaturesTest extends TestCase
 
         $this->actingAs($userA)
             ->post(route('credit-card-invoices.pay', $invoiceB), [
+                'payment_method' => Transaction::PAYMENT_TRANSFER,
                 'bank_account_id' => $bankA->id,
                 'amount' => 10,
                 'date' => now()->toDateString(),

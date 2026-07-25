@@ -18,6 +18,18 @@ export default {
         extend: {
             colors: {
                 lightPrimary: '#F4F7FE',
+                // Alias do brand — evita bg-primary “fantasma” sem contraste
+                primary: {
+                    DEFAULT: '#ffc107',
+                    50: '#FFF9E6',
+                    100: '#FFF0BF',
+                    200: '#FFE380',
+                    300: '#FFD54F',
+                    400: '#FFCA28',
+                    500: '#ffc107',
+                    600: '#e0a800',
+                    700: '#C79100',
+                },
                 brand: {
                     DEFAULT: '#ffc107',
                     50: '#FFF9E6',

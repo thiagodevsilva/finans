@@ -20,36 +20,55 @@ class TransactionRequest extends FormRequest
         $accountId = $this->user()->account_id;
         $isIncome = $this->input('type') === Transaction::TYPE_INCOME;
         $isExpense = $this->input('type') === Transaction::TYPE_EXPENSE;
+        $isTransfer = $this->input('type') === Transaction::TYPE_TRANSFER;
         $isCard = $isExpense && $this->input('payment_method') === Transaction::PAYMENT_CARD;
         $isInstallment = $isExpense && $this->boolean('is_installment');
+        $needsBank = in_array($this->input('payment_method'), [
+            Transaction::PAYMENT_PIX,
+            Transaction::PAYMENT_TRANSFER,
+        ], true);
 
         return [
-            'type' => ['required', Rule::in([Transaction::TYPE_INCOME, Transaction::TYPE_EXPENSE])],
+            'type' => [
+                'required',
+                Rule::in([
+                    Transaction::TYPE_INCOME,
+                    Transaction::TYPE_EXPENSE,
+                    Transaction::TYPE_TRANSFER,
+                ]),
+            ],
             'amount' => [
                 Rule::requiredIf(! $isInstallment),
                 'nullable',
                 'numeric',
                 'min:0.01',
             ],
-            'description' => ['required', 'string', 'max:255'],
+            'description' => [
+                Rule::requiredIf(! $isTransfer),
+                'nullable',
+                'string',
+                'max:255',
+            ],
             'category_id' => [
-                'required',
+                Rule::requiredIf($isIncome || $isExpense),
+                'nullable',
                 'uuid',
                 Rule::exists('categories', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
             ],
             'date' => ['required', 'date'],
             'payment_method' => [
-                Rule::requiredIf($isExpense),
+                Rule::requiredIf($isExpense || $isTransfer),
                 'nullable',
                 Rule::in(Transaction::PAYMENT_METHODS),
             ],
             'payment_card_id' => [
-                Rule::requiredIf($isCard),
+                Rule::requiredIf($isCard || $isTransfer),
                 'nullable',
                 'uuid',
                 Rule::exists('payment_cards', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
             ],
             'bank_account_id' => [
+                Rule::requiredIf($isTransfer && $needsBank),
                 'nullable',
                 'uuid',
                 Rule::exists('bank_accounts', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
@@ -79,12 +98,28 @@ class TransactionRequest extends FormRequest
                         ->whereNotNull('recurring_bill_id')
                 ),
             ],
+            'recurring_bill_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('recurring_bills', 'id')->where(
+                    fn ($q) => $q->where('account_id', $accountId)->where('active', true)
+                ),
+            ],
         ];
     }
 
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
+            if ($this->input('type') === Transaction::TYPE_TRANSFER) {
+                $card = PaymentCard::query()->find($this->input('payment_card_id'));
+                if (! $card || $card->type !== PaymentCard::TYPE_CREDIT) {
+                    $validator->errors()->add('payment_card_id', 'Pagamento de fatura exige um cartão de crédito.');
+                }
+
+                return;
+            }
+
             if ($this->input('type') !== Transaction::TYPE_EXPENSE) {
                 return;
             }
@@ -102,8 +137,8 @@ class TransactionRequest extends FormRequest
                     $validator->errors()->add('is_installment', 'Compra parcelada exige um cartão de crédito.');
                 }
 
-                if ($this->filled('recurring_transaction_id')) {
-                    $validator->errors()->add('recurring_transaction_id', 'Não é possível parcelar o pagamento de uma conta fixa.');
+                if ($this->filled('recurring_transaction_id') || $this->filled('recurring_bill_id')) {
+                    $validator->errors()->add('is_installment', 'Não é possível parcelar o pagamento de uma conta fixa.');
                 }
             }
         });
@@ -115,6 +150,29 @@ class TransactionRequest extends FormRequest
             'is_installment' => $this->boolean('is_installment'),
         ]);
 
+        $needsBank = in_array($this->input('payment_method'), [
+            Transaction::PAYMENT_PIX,
+            Transaction::PAYMENT_TRANSFER,
+        ], true);
+
+        if ($this->input('type') === Transaction::TYPE_TRANSFER) {
+            $this->merge([
+                'category_id' => null,
+                'is_installment' => false,
+                'total_amount' => null,
+                'installments_count' => null,
+                'installment_amount' => null,
+                'recurring_transaction_id' => null,
+                'recurring_bill_id' => null,
+                'bank_account_id' => $needsBank && $this->filled('bank_account_id')
+                    ? $this->input('bank_account_id')
+                    : null,
+                'description' => null,
+            ]);
+
+            return;
+        }
+
         if ($this->input('type') === Transaction::TYPE_INCOME) {
             $this->merge([
                 'payment_method' => null,
@@ -125,18 +183,24 @@ class TransactionRequest extends FormRequest
                 'installments_count' => null,
                 'installment_amount' => null,
                 'recurring_transaction_id' => null,
+                'recurring_bill_id' => null,
             ]);
 
             return;
         }
 
         $this->merge([
-            'bank_account_id' => null,
+            'bank_account_id' => $needsBank && $this->filled('bank_account_id')
+                ? $this->input('bank_account_id')
+                : null,
             'payment_card_id' => $this->input('payment_method') === Transaction::PAYMENT_CARD
                 ? $this->input('payment_card_id')
                 : null,
             'recurring_transaction_id' => $this->filled('recurring_transaction_id')
                 ? $this->input('recurring_transaction_id')
+                : null,
+            'recurring_bill_id' => $this->filled('recurring_bill_id')
+                ? $this->input('recurring_bill_id')
                 : null,
         ]);
 
@@ -164,7 +228,8 @@ class TransactionRequest extends FormRequest
             'total_amount' => 'valor total',
             'installments_count' => 'quantidade de parcelas',
             'installment_amount' => 'valor da parcela',
-            'recurring_transaction_id' => 'conta fixa',
+            'recurring_transaction_id' => 'conta fixa pendente',
+            'recurring_bill_id' => 'conta fixa',
         ];
     }
 }

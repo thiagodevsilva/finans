@@ -32,7 +32,7 @@ defineProps({
             </div>
         </div>
         <div class="ml-4 flex h-auto w-auto flex-col justify-center py-4 pr-4">
-            <p class="font-dm text-sm font-medium text-horizon-500">{{ title }}</p>
+            <p class="font-dm text-sm font-medium text-horizon-600">{{ title }}</p>
             <h4
                 class="text-xl font-bold tabular-nums"
                 :class="{

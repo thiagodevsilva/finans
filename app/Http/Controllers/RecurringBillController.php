@@ -33,6 +33,7 @@ class RecurringBillController extends Controller
 
         $bills = RecurringBill::query()
             ->with(['category:id,name,color', 'user:id,name', 'paymentCard:id,name,color', 'bankAccount:id,name,color'])
+            ->where('active', true)
             ->orderBy('description')
             ->get()
             ->map(fn (RecurringBill $bill) => [
@@ -95,10 +96,24 @@ class RecurringBillController extends Controller
         $this->authorize('update', $recurringBill);
 
         $data = $request->validated();
+        $propagate = $data['propagate'] ?? 'none';
+        $propagateFrom = $data['propagate_from'] ?? null;
+        unset($data['propagate'], $data['propagate_from']);
+
         $recurringBill->update($data);
 
         if ($recurringBill->active) {
             $this->service->materializeAhead($recurringBill->fresh(), 3);
+        }
+
+        if (in_array($propagate, ['open', 'from_date'], true)) {
+            $updated = $this->service->propagateToPlanned(
+                $recurringBill->fresh(),
+                $propagate === 'from_date' ? 'from_date' : 'open',
+                $propagateFrom
+            );
+
+            return back()->with('success', "Conta fixa atualizada. {$updated} lançamento(s) pendente(s) ajustado(s).");
         }
 
         return back()->with('success', 'Conta fixa atualizada.');
@@ -113,9 +128,20 @@ class RecurringBillController extends Controller
             ->where('status', Transaction::STATUS_PLANNED)
             ->delete();
 
-        $recurringBill->update(['active' => false]);
+        $hasHistory = Transaction::query()
+            ->where('recurring_bill_id', $recurringBill->id)
+            ->whereIn('status', [Transaction::STATUS_CONFIRMED, Transaction::STATUS_SKIPPED])
+            ->exists();
 
-        return back()->with('success', 'Conta fixa desativada.');
+        if ($hasHistory) {
+            $recurringBill->update(['active' => false]);
+
+            return back()->with('success', 'Conta fixa desativada (já havia pagamentos no histórico).');
+        }
+
+        $recurringBill->delete();
+
+        return back()->with('success', 'Conta fixa excluída.');
     }
 
     public function confirm(

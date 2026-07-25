@@ -43,6 +43,12 @@ class RecurringBillRequest extends FormRequest
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'active' => ['sometimes', 'boolean'],
+            'propagate' => ['sometimes', Rule::in(['none', 'open', 'from_date'])],
+            'propagate_from' => [
+                Rule::requiredIf($this->input('propagate') === 'from_date'),
+                'nullable',
+                'date',
+            ],
         ];
     }
 
@@ -66,6 +72,8 @@ class RecurringBillRequest extends FormRequest
                 : null,
             'bank_account_id' => $this->filled('bank_account_id') ? $this->input('bank_account_id') : null,
             'end_date' => $this->filled('end_date') ? $this->input('end_date') : null,
+            'propagate' => $this->input('propagate', 'none'),
+            'propagate_from' => $this->filled('propagate_from') ? $this->input('propagate_from') : null,
         ]);
     }
 
@@ -81,6 +89,8 @@ class RecurringBillRequest extends FormRequest
             'bank_account_id' => 'conta',
             'start_date' => 'início',
             'end_date' => 'fim',
+            'propagate' => 'atualizar lançamentos',
+            'propagate_from' => 'a partir da data',
         ];
     }
 }

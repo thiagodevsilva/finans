@@ -18,11 +18,21 @@ export const PAYMENT_METHODS = [
     { value: 'transfer', label: 'Transferência' },
 ];
 
+const PAYMENT_METHOD_LABELS = {
+    cash: 'Dinheiro',
+    pix: 'PIX',
+    transfer: 'Transferência',
+    card: 'Cartão',
+};
+
 export function paymentLabel(tx) {
     if (!tx) return '';
     if (tx.type === 'transfer') {
         const card = tx.payment_card?.name ? ` · ${tx.payment_card.name}` : '';
-        return `Pagamento de fatura${card}`;
+        const method = PAYMENT_METHOD_LABELS[tx.payment_method];
+        const via = method ? ` via ${method}` : '';
+        const bank = tx.bank_account?.name ? ` · ${tx.bank_account.name}` : '';
+        return `Pagamento de fatura${card}${via}${bank}`;
     }
     if (tx.type === 'income') {
         return tx.bank_account?.name || 'Sem conta';
@@ -30,13 +40,10 @@ export function paymentLabel(tx) {
     if (tx.payment_method === 'card' && tx.payment_card) {
         return formatCardLabel(tx.payment_card);
     }
-    const map = {
-        cash: 'Dinheiro',
-        pix: 'PIX',
-        transfer: 'Transferência',
-        card: 'Cartão',
-    };
-    return map[tx.payment_method] || tx.payment_method || '—';
+    if ((tx.payment_method === 'pix' || tx.payment_method === 'transfer') && tx.bank_account?.name) {
+        return `${PAYMENT_METHOD_LABELS[tx.payment_method]} · ${tx.bank_account.name}`;
+    }
+    return PAYMENT_METHOD_LABELS[tx.payment_method] || tx.payment_method || '—';
 }
 
 export function formatCardLabel(card) {

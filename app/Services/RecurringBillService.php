@@ -129,6 +129,111 @@ class RecurringBillService
         $transaction->update(['status' => Transaction::STATUS_SKIPPED]);
     }
 
+    /**
+     * Confirma planned do mês ou cria expense confirmada vinculada à conta fixa.
+     */
+    public function settleForBill(User $user, RecurringBill $bill, array $data): Transaction
+    {
+        $date = Carbon::parse($data['date']);
+
+        $planned = Transaction::query()
+            ->where('recurring_bill_id', $bill->id)
+            ->where('status', Transaction::STATUS_PLANNED)
+            ->whereYear('date', $date->year)
+            ->whereMonth('date', $date->month)
+            ->first();
+
+        if ($planned) {
+            $confirmed = $this->confirm(
+                $planned,
+                (float) $data['amount'],
+                $data['date'],
+                [
+                    'payment_method' => $data['payment_method'] ?? null,
+                    'payment_card_id' => $data['payment_card_id'] ?? null,
+                ]
+            );
+
+            $confirmed->update([
+                'description' => $data['description'] ?? $confirmed->description,
+                'category_id' => $data['category_id'] ?? $confirmed->category_id,
+                'credit_card_invoice_id' => $data['credit_card_invoice_id'] ?? $confirmed->credit_card_invoice_id,
+            ]);
+
+            return $confirmed->fresh();
+        }
+
+        return Transaction::create([
+            'account_id' => $user->account_id,
+            'user_id' => $user->id,
+            'category_id' => $data['category_id'],
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => $data['amount'],
+            'description' => $data['description'],
+            'date' => $data['date'],
+            'payment_method' => $data['payment_method'] ?? null,
+            'payment_card_id' => $data['payment_card_id'] ?? null,
+            'bank_account_id' => null,
+            'credit_card_invoice_id' => $data['credit_card_invoice_id'] ?? null,
+            'recurring_bill_id' => $bill->id,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+    }
+
+    /**
+     * Atualiza lançamentos planned conforme escopo (abertos ou a partir de data).
+     */
+    public function propagateToPlanned(RecurringBill $bill, string $scope, ?string $fromDate = null): int
+    {
+        $query = Transaction::query()
+            ->where('recurring_bill_id', $bill->id)
+            ->where('status', Transaction::STATUS_PLANNED);
+
+        if ($scope === 'from_date') {
+            $query->whereDate('date', '>=', $fromDate ?: now()->toDateString());
+        }
+
+        $updates = [
+            'description' => $bill->description,
+            'amount' => $bill->estimated_amount,
+            'category_id' => $bill->category_id,
+            'payment_method' => $bill->payment_method,
+            'payment_card_id' => $bill->payment_card_id,
+        ];
+
+        $count = 0;
+
+        $query->get()->each(function (Transaction $tx) use ($bill, $updates, &$count) {
+            $payload = $updates;
+
+            if ($bill->day_of_month) {
+                $date = Carbon::parse($tx->date);
+                $payload['date'] = $date->copy()
+                    ->day(min((int) $bill->day_of_month, $date->daysInMonth))
+                    ->toDateString();
+            }
+
+            if (
+                ($payload['payment_method'] ?? null) === Transaction::PAYMENT_CARD
+                && ! empty($payload['payment_card_id'])
+            ) {
+                $card = PaymentCard::query()->find($payload['payment_card_id']);
+                if ($card) {
+                    $payload['credit_card_invoice_id'] = $this->invoiceService
+                        ->resolveForPurchase($card, $payload['date'] ?? $tx->date)
+                        ?->id;
+                }
+            } else {
+                $payload['credit_card_invoice_id'] = null;
+            }
+
+            $tx->update($payload);
+            $count++;
+        });
+
+        return $count;
+    }
+
     private function createPlannedTransaction(RecurringBill $bill, Carbon $dueDate): Transaction
     {
         $invoiceId = null;

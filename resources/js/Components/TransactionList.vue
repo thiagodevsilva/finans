@@ -23,6 +23,18 @@ defineProps({
 });
 
 const emit = defineEmits(['destroy']);
+
+const rowClass = (type) => {
+    if (type === 'income') return 'tx-row-income';
+    if (type === 'transfer') return 'tx-row-transfer';
+    return 'tx-row-expense';
+};
+
+const amountClass = (type) => {
+    if (type === 'income') return 'text-emerald-700';
+    if (type === 'transfer') return 'text-slate-700';
+    return 'text-red-700';
+};
 </script>
 
 <template>
@@ -31,24 +43,18 @@ const emit = defineEmits(['destroy']);
         <article
             v-for="tx in transactions"
             :key="tx.id"
-            class="rounded-[16px] bg-white p-4 shadow-soft"
+            class="rounded-[16px] p-4 shadow-soft"
+            :class="rowClass(tx.type)"
         >
             <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
-                    <p class="truncate font-semibold text-navy-700">{{ tx.description }}</p>
-                    <p class="mt-0.5 text-xs text-horizon-500">{{ formatDate(tx.date) }} · {{ tx.user?.name }}</p>
+                    <p class="truncate font-semibold text-navy-800">{{ tx.description }}</p>
+                    <p class="mt-0.5 text-xs text-horizon-600">{{ formatDate(tx.date) }} · {{ tx.user?.name }}</p>
                 </div>
-                <p
-                    class="shrink-0 text-sm font-bold"
-                    :class="{
-                        'text-emerald-600': tx.type === 'income',
-                        'text-red-600': tx.type === 'expense',
-                        'text-horizon-600': tx.type === 'transfer',
-                    }"
-                >
+                <p class="shrink-0 text-sm font-bold tabular-nums" :class="amountClass(tx.type)">
                     <template v-if="tx.type === 'income'">+</template>
                     <template v-else-if="tx.type === 'expense'">-</template>
-                    <template v-else></template>
+                    <template v-else>→ </template>
                     {{ formatBRL(tx.amount) }}
                 </p>
             </div>
@@ -67,13 +73,13 @@ const emit = defineEmits(['destroy']);
                     Ver compra
                 </Link>
             </div>
-            <div v-if="showActions && canEdit(tx) && tx.type !== 'transfer'" class="mt-3 flex gap-4 border-t border-horizon-100 pt-3 text-sm">
+            <div v-if="showActions && canEdit(tx) && tx.type !== 'transfer'" class="mt-3 flex gap-4 border-t border-black/5 pt-3 text-sm">
                 <Link :href="route('transactions.edit', tx.id)" class="font-medium text-cta hover:underline">Editar</Link>
                 <button type="button" class="font-medium text-red-600 hover:underline" @click="emit('destroy', tx)">
                     Excluir
                 </button>
             </div>
-            <div v-else-if="showActions && canEdit(tx)" class="mt-3 flex gap-4 border-t border-horizon-100 pt-3 text-sm">
+            <div v-else-if="showActions && canEdit(tx)" class="mt-3 flex gap-4 border-t border-black/5 pt-3 text-sm">
                 <button type="button" class="font-medium text-red-600 hover:underline" @click="emit('destroy', tx)">
                     Excluir
                 </button>
@@ -86,9 +92,9 @@ const emit = defineEmits(['destroy']);
 
     <!-- Desktop table -->
     <div class="hidden overflow-x-auto md:block">
-        <table class="min-w-full divide-y divide-horizon-100 text-sm">
+        <table class="min-w-full text-sm">
             <thead class="text-left text-horizon-500">
-                <tr>
+                <tr class="border-b border-horizon-100">
                     <th class="px-5 py-4 font-medium">Data</th>
                     <th class="px-5 py-4 font-medium">Descrição</th>
                     <th class="px-5 py-4 font-medium">Categoria</th>
@@ -98,11 +104,16 @@ const emit = defineEmits(['destroy']);
                     <th v-if="showActions" class="px-5 py-4 font-medium" />
                 </tr>
             </thead>
-            <tbody class="divide-y divide-horizon-100">
-                <tr v-for="tx in transactions" :key="tx.id">
-                    <td class="whitespace-nowrap px-5 py-3 text-navy-700">{{ formatDate(tx.date) }}</td>
-                    <td class="px-5 py-3 text-navy-700">
-                        <div>{{ tx.description }}</div>
+            <tbody>
+                <tr
+                    v-for="tx in transactions"
+                    :key="tx.id"
+                    class="border-b border-black/5"
+                    :class="rowClass(tx.type)"
+                >
+                    <td class="whitespace-nowrap px-5 py-3 text-navy-800">{{ formatDate(tx.date) }}</td>
+                    <td class="px-5 py-3 text-navy-800">
+                        <div class="font-medium">{{ tx.description }}</div>
                         <Link
                             v-if="tx.installment_plan_id"
                             :href="route('installment-plans.show', tx.installment_plan_id)"
@@ -122,16 +133,10 @@ const emit = defineEmits(['destroy']);
                         <PaymentBadge :transaction="tx" />
                     </td>
                     <td class="px-5 py-3 text-horizon-600">{{ tx.user?.name }}</td>
-                    <td
-                        class="px-5 py-3 text-right font-bold"
-                        :class="{
-                            'text-emerald-600': tx.type === 'income',
-                            'text-red-600': tx.type === 'expense',
-                            'text-horizon-600': tx.type === 'transfer',
-                        }"
-                    >
+                    <td class="px-5 py-3 text-right font-bold tabular-nums" :class="amountClass(tx.type)">
                         <template v-if="tx.type === 'income'">+</template>
                         <template v-else-if="tx.type === 'expense'">-</template>
+                        <template v-else>→ </template>
                         {{ formatBRL(tx.amount) }}
                     </td>
                     <td v-if="showActions" class="whitespace-nowrap px-5 py-3 text-right">

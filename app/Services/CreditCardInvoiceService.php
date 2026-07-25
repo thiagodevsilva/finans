@@ -18,19 +18,32 @@ class CreditCardInvoiceService
         $date = Carbon::parse($purchaseDate)->startOfDay();
         $closingDate = $this->closingDateForPurchase($card, $date);
         $dueDate = $this->dueDateForClosing($card, $closingDate);
+        $closing = $closingDate->toDateString();
 
-        return CreditCardInvoice::query()->firstOrCreate(
-            [
+        $existing = CreditCardInvoice::query()
+            ->where('payment_card_id', $card->id)
+            ->whereDate('closing_date', $closing)
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        try {
+            return CreditCardInvoice::query()->create([
                 'payment_card_id' => $card->id,
-                'closing_date' => $closingDate->toDateString(),
-            ],
-            [
+                'closing_date' => $closing,
                 'account_id' => $card->account_id,
                 'due_date' => $dueDate->toDateString(),
                 'status' => CreditCardInvoice::STATUS_OPEN,
                 'paid_amount' => 0,
-            ]
-        );
+            ]);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            return CreditCardInvoice::query()
+                ->where('payment_card_id', $card->id)
+                ->whereDate('closing_date', $closing)
+                ->firstOrFail();
+        }
     }
 
     public function closingDateForPurchase(PaymentCard $card, CarbonInterface $purchaseDate): Carbon
@@ -38,7 +51,7 @@ class CreditCardInvoiceService
         $year = (int) $purchaseDate->year;
         $month = (int) $purchaseDate->month;
 
-        if ((int) $purchaseDate->day > (int) $card->closing_day) {
+        if ((int) $purchaseDate->day >= (int) $card->closing_day) {
             $month++;
             if ($month > 12) {
                 $month = 1;
@@ -98,6 +111,28 @@ class CreditCardInvoiceService
             $this->resolveForPurchase($card, $probe);
             $cursor->addMonthNoOverflow();
         }
+    }
+
+    public function resolvePayableInvoice(PaymentCard $card): ?CreditCardInvoice
+    {
+        if ($card->type !== PaymentCard::TYPE_CREDIT) {
+            return null;
+        }
+
+        $this->ensureUpcomingInvoices($card);
+
+        $invoices = CreditCardInvoice::query()
+            ->where('payment_card_id', $card->id)
+            ->whereIn('status', [
+                CreditCardInvoice::STATUS_OPEN,
+                CreditCardInvoice::STATUS_CLOSED,
+                CreditCardInvoice::STATUS_PARTIAL,
+            ])
+            ->orderBy('due_date')
+            ->get();
+
+        return $invoices->first(fn (CreditCardInvoice $invoice) => $invoice->remainingAmount() > 0)
+            ?? $invoices->first();
     }
 
     private function clampDay(int $year, int $month, int $day): Carbon

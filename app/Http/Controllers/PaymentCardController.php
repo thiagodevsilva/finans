@@ -7,9 +7,12 @@ use App\Http\Requests\PaymentCardRequest;
 use App\Models\BankAccount;
 use App\Models\CreditCardInvoice;
 use App\Models\PaymentCard;
+use App\Models\Transaction;
 use App\Services\CreditCardInvoiceService;
 use App\Services\CreditCardPaymentService;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -35,26 +38,6 @@ class PaymentCardController extends Controller
                     $this->invoiceService->ensureUpcomingInvoices($card);
                 }
 
-                $openInvoices = CreditCardInvoice::query()
-                    ->where('payment_card_id', $card->id)
-                    ->whereIn('status', [
-                        CreditCardInvoice::STATUS_OPEN,
-                        CreditCardInvoice::STATUS_CLOSED,
-                        CreditCardInvoice::STATUS_PARTIAL,
-                    ])
-                    ->orderBy('due_date')
-                    ->get()
-                    ->map(fn (CreditCardInvoice $invoice) => [
-                        'id' => $invoice->id,
-                        'closing_date' => $invoice->closing_date->toDateString(),
-                        'due_date' => $invoice->due_date->toDateString(),
-                        'status' => $invoice->status,
-                        'status_label' => CreditCardInvoice::statusLabel($invoice->status),
-                        'total' => $invoice->totalCharges(),
-                        'paid_amount' => (float) $invoice->paid_amount,
-                        'remaining' => $invoice->remainingAmount(),
-                    ]);
-
                 return [
                     'id' => $card->id,
                     'name' => $card->name,
@@ -71,12 +54,32 @@ class PaymentCardController extends Controller
                     'user_id' => $card->user_id,
                     'user' => $card->user,
                     'can_edit' => $user->isOwner() || $card->user_id === $user->id,
-                    'invoices' => $openInvoices,
                 ];
             });
 
+        $recentPayments = Transaction::query()
+            ->with([
+                'paymentCard:id,name,brand,type,last_four,color',
+                'bankAccount:id,name',
+            ])
+            ->where('type', Transaction::TYPE_TRANSFER)
+            ->whereNotNull('credit_card_invoice_id')
+            ->orderByDesc('date')
+            ->orderByDesc('created_at')
+            ->limit(8)
+            ->get()
+            ->map(fn (Transaction $tx) => [
+                'id' => $tx->id,
+                'description' => $tx->description,
+                'amount' => (float) $tx->amount,
+                'date' => $tx->date->toDateString(),
+                'payment_card' => $tx->paymentCard,
+                'bank_account' => $tx->bankAccount,
+            ]);
+
         return Inertia::render('PaymentCards/Index', [
             'cards' => $cards,
+            'recentPayments' => $recentPayments,
             'bankAccounts' => BankAccount::query()->orderBy('name')->get(['id', 'name', 'color']),
             'brands' => collect(PaymentCard::BRANDS)->map(fn ($brand) => [
                 'value' => $brand,
@@ -86,6 +89,53 @@ class PaymentCardController extends Controller
                 'value' => $type,
                 'label' => PaymentCard::typeLabel($type),
             ]),
+        ]);
+    }
+
+    public function payments(Request $request): Response
+    {
+        $this->authorize('viewAny', PaymentCard::class);
+
+        $month = (int) $request->input('month', now()->month);
+        $year = (int) $request->input('year', now()->year);
+        $cardId = $request->input('payment_card_id');
+
+        $start = Carbon::create($year, $month, 1)->startOfMonth();
+        $end = (clone $start)->endOfMonth();
+
+        $payments = Transaction::query()
+            ->with([
+                'paymentCard:id,name,brand,type,last_four,color',
+                'bankAccount:id,name',
+            ])
+            ->where('type', Transaction::TYPE_TRANSFER)
+            ->whereNotNull('credit_card_invoice_id')
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->when($cardId, fn ($q) => $q->where('payment_card_id', $cardId))
+            ->orderByDesc('date')
+            ->orderByDesc('created_at')
+            ->paginate(20)
+            ->withQueryString()
+            ->through(fn (Transaction $tx) => [
+                'id' => $tx->id,
+                'description' => $tx->description,
+                'amount' => (float) $tx->amount,
+                'date' => $tx->date->toDateString(),
+                'payment_card' => $tx->paymentCard,
+                'bank_account' => $tx->bankAccount,
+            ]);
+
+        return Inertia::render('PaymentCards/Payments', [
+            'payments' => $payments,
+            'cards' => PaymentCard::query()
+                ->where('type', PaymentCard::TYPE_CREDIT)
+                ->orderBy('name')
+                ->get(['id', 'name', 'brand', 'type', 'last_four', 'color']),
+            'filters' => [
+                'month' => $month,
+                'year' => $year,
+                'payment_card_id' => $cardId,
+            ],
         ]);
     }
 
@@ -138,14 +188,17 @@ class PaymentCardController extends Controller
     ): RedirectResponse {
         $this->authorize('pay', $creditCardInvoice);
 
-        $bankAccount = BankAccount::query()->findOrFail($request->validated('bank_account_id'));
+        $bankAccount = $request->validated('bank_account_id')
+            ? BankAccount::query()->findOrFail($request->validated('bank_account_id'))
+            : null;
 
         $this->paymentService->pay(
             $request->user(),
             $creditCardInvoice,
-            $bankAccount,
             (float) $request->validated('amount'),
             $request->validated('date'),
+            $request->validated('payment_method'),
+            $bankAccount,
             $request->validated('description')
         );
 
