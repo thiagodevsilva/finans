@@ -181,6 +181,65 @@ class RecurringBillService
     }
 
     /**
+     * Vincula uma saída existente à conta fixa, dando baixa no planned do mês se houver.
+     */
+    public function linkExpenseToBill(
+        User $user,
+        Transaction $expense,
+        RecurringBill $bill,
+        array $data
+    ): Transaction {
+        $date = Carbon::parse($data['date'] ?? $expense->date);
+        $dateString = $date->toDateString();
+
+        $planned = Transaction::query()
+            ->where('recurring_bill_id', $bill->id)
+            ->where('status', Transaction::STATUS_PLANNED)
+            ->whereYear('date', $date->year)
+            ->whereMonth('date', $date->month)
+            ->first();
+
+        if ($planned && $planned->id !== $expense->id) {
+            $confirmed = $this->confirm(
+                $planned,
+                (float) ($data['amount'] ?? $expense->amount),
+                $dateString,
+                [
+                    'payment_method' => $data['payment_method'] ?? $expense->payment_method,
+                    'payment_card_id' => $data['payment_card_id'] ?? $expense->payment_card_id,
+                ]
+            );
+
+            $confirmed->update([
+                'description' => $data['description'] ?? $expense->description,
+                'category_id' => $data['category_id'] ?? $expense->category_id,
+                'credit_card_invoice_id' => $data['credit_card_invoice_id'] ?? $expense->credit_card_invoice_id,
+                'user_id' => $user->id,
+            ]);
+
+            $expense->delete();
+
+            return $confirmed->fresh();
+        }
+
+        $expense->update([
+            'amount' => $data['amount'] ?? $expense->amount,
+            'description' => $data['description'] ?? $expense->description,
+            'category_id' => $data['category_id'] ?? $expense->category_id,
+            'date' => $dateString,
+            'payment_method' => $data['payment_method'] ?? $expense->payment_method,
+            'payment_card_id' => $data['payment_card_id'] ?? $expense->payment_card_id,
+            'bank_account_id' => $data['bank_account_id'] ?? $expense->bank_account_id,
+            'credit_card_invoice_id' => $data['credit_card_invoice_id'] ?? $expense->credit_card_invoice_id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'recurring_bill_id' => $bill->id,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        return $expense->fresh();
+    }
+
+    /**
      * Atualiza lançamentos planned conforme escopo (abertos ou a partir de data).
      */
     public function propagateToPlanned(RecurringBill $bill, string $scope, ?string $fromDate = null): int

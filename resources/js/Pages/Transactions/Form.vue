@@ -283,12 +283,15 @@ watch(
 
 const selectPending = (item) => {
     form.recurring_transaction_id = item.id;
+    form.recurring_bill_id = '';
     form.description = item.description;
     form.category_id = item.category_id;
     form.amount = item.amount;
     form.date = item.date;
     recurringSearch.value = item.label;
     form.is_installment = false;
+    billSearch.value = '';
+    billPickerOpen.value = true;
 
     if (item.payment_method === 'card' && item.payment_card_id) {
         form.payment_selection = `card:${item.payment_card_id}`;
@@ -304,15 +307,39 @@ const clearPending = () => {
 
 const selectBill = (item) => {
     form.recurring_bill_id = item.id;
+    form.recurring_transaction_id = '';
+    recurringSearch.value = '';
     billSearch.value = item.description;
     billPickerOpen.value = false;
     billOpen.value = false;
+
+    if (!isEdit.value) {
+        form.description = item.description;
+        form.category_id = item.category_id;
+        form.amount = item.estimated_amount;
+    }
 };
 
 const clearBill = () => {
     form.recurring_bill_id = '';
     billSearch.value = '';
     billPickerOpen.value = true;
+};
+
+const onPendingSearchInput = () => {
+    if (!form.recurring_transaction_id) return;
+    const selected = props.pendingRecurring.find((item) => item.id === form.recurring_transaction_id);
+    if (!selected || recurringSearch.value !== selected.label) {
+        form.recurring_transaction_id = '';
+    }
+};
+
+const onBillSearchInput = () => {
+    if (!form.recurring_bill_id) return;
+    const selected = props.recurringBills.find((item) => item.id === form.recurring_bill_id);
+    if (!selected || billSearch.value !== selected.description) {
+        form.recurring_bill_id = '';
+    }
 };
 
 const submit = () => {
@@ -489,7 +516,7 @@ const submit = () => {
                         autocomplete="off"
                         @focus="recurringOpen = true"
                         @blur="recurringOpen = false"
-                        @input="form.recurring_transaction_id = ''"
+                        @input="onPendingSearchInput"
                     />
                     <p v-if="selectedPending" class="mt-1 text-xs text-horizon-500">
                         Selecionada: {{ selectedPending.description }}
@@ -519,10 +546,10 @@ const submit = () => {
                 </div>
 
                 <div
-                    v-if="isEdit && form.type === 'expense' && recurringBills.length && !form.is_installment"
+                    v-if="form.type === 'expense' && recurringBills.length && !form.is_installment && !form.recurring_transaction_id"
                     class="relative"
                 >
-                    <InputLabel value="Conta fixa" />
+                    <InputLabel :value="isEdit ? 'Conta fixa' : 'Vincular conta fixa (opcional)'" />
                     <template v-if="form.recurring_bill_id && !billPickerOpen">
                         <p class="mt-2 text-sm text-horizon-600">
                             Vinculada: <span class="font-medium text-navy-700">{{ linkedBillLabel }}</span>
@@ -538,7 +565,7 @@ const submit = () => {
                             autocomplete="off"
                             @focus="billOpen = true"
                             @blur="billOpen = false"
-                            @input="form.recurring_bill_id = ''"
+                            @input="onBillSearchInput"
                         />
                         <ul
                             v-if="billOpen"

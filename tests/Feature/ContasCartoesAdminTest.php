@@ -130,6 +130,67 @@ class ContasCartoesAdminTest extends TestCase
         );
     }
 
+    public function test_editing_expense_to_link_bill_settles_planned(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-bills.store'), [
+                'description' => 'Internet',
+                'category_id' => $category->id,
+                'estimated_amount' => 100,
+                'day_of_month' => now()->day,
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'start_date' => now()->startOfMonth()->toDateString(),
+            ])
+            ->assertRedirect();
+
+        $bill = RecurringBill::withoutGlobalScopes()->first();
+
+        $this->actingAs($owner)
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_EXPENSE,
+                'amount' => 99,
+                'description' => 'Net',
+                'category_id' => $category->id,
+                'date' => now()->toDateString(),
+                'payment_method' => Transaction::PAYMENT_PIX,
+            ])
+            ->assertRedirect();
+
+        $expense = Transaction::withoutGlobalScopes()->where('description', 'Net')->first();
+
+        $this->actingAs($owner)
+            ->put(route('transactions.update', $expense), [
+                'type' => Transaction::TYPE_EXPENSE,
+                'amount' => 99,
+                'description' => 'Net',
+                'category_id' => $category->id,
+                'date' => now()->toDateString(),
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'recurring_bill_id' => $bill->id,
+            ])
+            ->assertRedirect(route('transactions.index'));
+
+        $this->assertSame(
+            0,
+            Transaction::withoutGlobalScopes()
+                ->where('recurring_bill_id', $bill->id)
+                ->where('status', Transaction::STATUS_PLANNED)
+                ->whereMonth('date', now()->month)
+                ->whereYear('date', now()->year)
+                ->count()
+        );
+
+        $this->assertDatabaseHas('transactions', [
+            'recurring_bill_id' => $bill->id,
+            'status' => Transaction::STATUS_CONFIRMED,
+            'amount' => 99,
+        ]);
+    }
+
     public function test_invoice_payment_via_transaction_form(): void
     {
         $account = Account::factory()->create();

@@ -97,6 +97,8 @@ class TransactionController extends Controller
             }
         }
 
+        $this->refreshRecurringHorizon();
+
         return Inertia::render('Transactions/Form', [
             'transaction' => null,
             'defaults' => [
@@ -207,6 +209,8 @@ class TransactionController extends Controller
                 ->with('error', 'Pagamentos de fatura não podem ser editados por este formulário.');
         }
 
+        $this->refreshRecurringHorizon();
+
         return Inertia::render('Transactions/Form', [
             'transaction' => $transaction->load([
                 'paymentCard:id,name,brand,type,last_four,color',
@@ -258,6 +262,21 @@ class TransactionController extends Controller
             $data['credit_card_invoice_id'] = null;
             $data['payment_card_id'] = null;
             $data['recurring_bill_id'] = null;
+        }
+
+        if (
+            ($data['type'] ?? null) === Transaction::TYPE_EXPENSE
+            && ! empty($data['recurring_bill_id'])
+        ) {
+            $bill = RecurringBill::query()->findOrFail($data['recurring_bill_id']);
+            $this->recurringBillService->linkExpenseToBill(
+                $request->user(),
+                $transaction,
+                $bill,
+                $data
+            );
+
+            return redirect()->route('transactions.index')->with('success', 'Conta fixa marcada como paga.');
         }
 
         $transaction->update($data);
@@ -384,5 +403,13 @@ class TransactionController extends Controller
                 ),
             ])
             ->all();
+    }
+
+    private function refreshRecurringHorizon(): void
+    {
+        RecurringBill::query()
+            ->where('active', true)
+            ->get()
+            ->each(fn (RecurringBill $bill) => $this->recurringBillService->materializeAhead($bill, 3));
     }
 }
