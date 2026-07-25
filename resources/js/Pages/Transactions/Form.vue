@@ -6,8 +6,13 @@ import MoneyInput from '@/Components/MoneyInput.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { PAYMENT_METHODS, formatCardLabel, formatBRL } from '@/utils/format';
+import { useAppTour } from '@/Composables/useAppTour';
+import { useTourDemo } from '@/Composables/useTourDemo';
+import { TRANSACTIONS_TOUR_ID } from '@/tours/transactions';
+import TourDemoBanner from '@/Components/TourDemoBanner.vue';
+import TourHelpButton from '@/Components/TourHelpButton.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
     transaction: Object,
@@ -101,6 +106,36 @@ const billSearch = ref(initialBillId ? initialBillLabel : '');
 const billOpen = ref(false);
 const billPickerOpen = ref(!initialBillId);
 const installmentSource = ref(null);
+
+const { startTour, resumeIfActive, isTourActive } = useAppTour();
+const { isDemoTour, formType: demoFormType, paymentSelection: demoPaymentSelection } = useTourDemo();
+const showingDemo = computed(() => isDemoTour(TRANSACTIONS_TOUR_ID));
+
+watch(demoFormType, (type) => {
+    if (!showingDemo.value || !type) {
+        return;
+    }
+    form.type = type;
+});
+
+watch(demoPaymentSelection, (value) => {
+    if (!showingDemo.value || !value) {
+        return;
+    }
+    form.payment_selection = value;
+});
+
+onMounted(() => {
+    if (isTourActive()) {
+        resumeIfActive();
+        return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tour') === TRANSACTIONS_TOUR_ID) {
+        startTour(TRANSACTIONS_TOUR_ID);
+    }
+});
 
 const typeOptions = [
     { value: 'expense', label: 'Saída' },
@@ -344,6 +379,10 @@ const onBillSearchInput = () => {
 };
 
 const submit = () => {
+    if (showingDemo.value) {
+        return;
+    }
+
     if (form.type === 'income') {
         form.payment_method = null;
         form.payment_card_id = null;
@@ -391,13 +430,18 @@ const submit = () => {
     <Head :title="isEdit ? 'Editar transação' : 'Nova transação'" />
 
     <AppLayout>
-        <div class="mb-6">
-            <h1 class="text-2xl font-bold text-slate-900">{{ isEdit ? 'Editar transação' : 'Nova transação' }}</h1>
-            <Link :href="route('transactions.index')" class="text-sm text-cta hover:underline">Voltar</Link>
+        <TourDemoBanner :show="showingDemo" />
+
+        <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900">{{ isEdit ? 'Editar transação' : 'Nova transação' }}</h1>
+                <Link :href="route('transactions.index')" class="text-sm text-cta hover:underline">Voltar</Link>
+            </div>
+            <TourHelpButton v-if="!isEdit" :tour-id="TRANSACTIONS_TOUR_ID" />
         </div>
 
         <form class="max-w-xl space-y-4 rounded-lg bg-white p-6 shadow-sm ring-1 ring-slate-200" @submit.prevent="submit">
-            <div>
+            <div data-tour="tx-types">
                 <InputLabel value="Tipo" />
                 <div class="segmented mt-2">
                     <label
@@ -406,7 +450,7 @@ const submit = () => {
                         class="segmented-option"
                         :class="form.type === opt.value ? 'segmented-option-active' : 'segmented-option-idle'"
                     >
-                        <input v-model="form.type" type="radio" class="sr-only" :value="opt.value" />
+                        <input v-model="form.type" type="radio" class="sr-only" :value="opt.value" :disabled="showingDemo" />
                         {{ opt.label }}
                     </label>
                 </div>
@@ -607,7 +651,7 @@ const submit = () => {
                     <InputError class="mt-2" :message="form.errors.category_id" />
                 </div>
 
-                <div v-if="form.type === 'income'">
+                <div v-if="form.type === 'income'" data-tour="tx-bank">
                     <InputLabel value="Conta (opcional)" />
                     <select v-model="form.bank_account_id" class="mt-1 block w-full rounded-md border-slate-300">
                         <option value="">Sem conta</option>
@@ -618,7 +662,7 @@ const submit = () => {
                     <InputError class="mt-2" :message="form.errors.bank_account_id" />
                 </div>
 
-                <div v-else>
+                <div v-else data-tour="tx-payment">
                     <InputLabel value="Forma de pagamento" />
                     <select v-model="form.payment_selection" class="mt-1 block w-full rounded-md border-slate-300" required>
                         <optgroup label="Geral">
@@ -636,7 +680,7 @@ const submit = () => {
                     </select>
                     <InputError class="mt-2" :message="form.errors.payment_method || form.errors.payment_card_id" />
 
-                    <div v-if="needsBankAccount" class="mt-3">
+                    <div v-if="needsBankAccount" class="mt-3" data-tour="tx-bank">
                         <InputLabel value="Conta bancária (opcional)" />
                         <select v-model="form.bank_account_id" class="mt-1 block w-full rounded-md border-slate-300">
                             <option value="">Sem conta</option>
@@ -701,7 +745,11 @@ const submit = () => {
                 </div>
             </template>
 
-            <PrimaryButton :disabled="form.processing">{{ isEdit ? 'Salvar' : 'Criar' }}</PrimaryButton>
+            <div data-tour="tx-submit">
+                <PrimaryButton :disabled="form.processing || showingDemo">
+                    {{ showingDemo ? 'Bloqueado no guia' : (isEdit ? 'Salvar' : 'Criar') }}
+                </PrimaryButton>
+            </div>
         </form>
     </AppLayout>
 </template>

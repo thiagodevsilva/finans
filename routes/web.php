@@ -6,6 +6,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InstallmentPlanController;
 use App\Http\Controllers\MemberController;
+use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\PaymentCardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecurringBillController;
@@ -34,6 +35,9 @@ Route::middleware(['auth', 'last.seen'])->group(function () {
 
     Route::middleware('family')->group(function () {
         Route::get('/dashboard', DashboardController::class)->name('dashboard');
+
+        Route::post('/onboarding', [OnboardingController::class, 'store'])->name('onboarding.store');
+        Route::delete('/onboarding', [OnboardingController::class, 'destroy'])->name('onboarding.destroy');
 
         Route::resource('transactions', TransactionController::class)->except(['show']);
 

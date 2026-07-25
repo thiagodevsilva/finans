@@ -1,5 +1,7 @@
 import './bootstrap';
 import '../css/app.css';
+import 'shepherd.js/dist/css/shepherd.css';
+import '../css/shepherd-levita.css';
 
 import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';

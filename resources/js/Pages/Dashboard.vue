@@ -3,10 +3,17 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import Card from '@/Components/Card.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import StatWidget from '@/Components/StatWidget.vue';
+import TourDemoBanner from '@/Components/TourDemoBanner.vue';
+import TourHelpButton from '@/Components/TourHelpButton.vue';
 import TransactionList from '@/Components/TransactionList.vue';
+import WelcomeOnboardingModal from '@/Components/WelcomeOnboardingModal.vue';
+import { useAppTour } from '@/Composables/useAppTour';
+import { useTourDemo } from '@/Composables/useTourDemo';
+import { DASHBOARD_TOUR_ID } from '@/tours/dashboard';
+import { FIRST_SETUP_TOUR_ID } from '@/tours/firstSetup';
 import { formatBRL, MONTHS } from '@/utils/format';
-import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { computed, onMounted, ref } from 'vue';
 
 const props = defineProps({
     summary: Object,
@@ -32,17 +39,44 @@ const props = defineProps({
     recentTransactions: Array,
 });
 
+const page = usePage();
 const mode = ref('money');
+const showWelcome = ref(false);
+const { startFirstSetup, startTour, resumeIfActive, skipOnboarding, isTourActive } = useAppTour();
+const { isDemoTour, demoDashboardData } = useTourDemo();
+
+const showingDemo = computed(() => isDemoTour(DASHBOARD_TOUR_ID));
+
+const summary = computed(() =>
+    showingDemo.value ? demoDashboardData.summary : props.summary,
+);
+const invoiceSummary = computed(() =>
+    showingDemo.value ? demoDashboardData.invoiceSummary : props.invoiceSummary,
+);
+const recurringSummary = computed(() =>
+    showingDemo.value ? demoDashboardData.recurringSummary : props.recurringSummary,
+);
+const recentTransactions = computed(() =>
+    showingDemo.value ? demoDashboardData.recentTransactions : props.recentTransactions,
+);
 
 const years = computed(() => {
     const current = new Date().getFullYear();
     return [current, current - 1, current - 2];
 });
 
-const hasRecurring = computed(() => props.recurringSummary.total_count > 0);
+const hasRecurring = computed(() =>
+    showingDemo.value || recurringSummary.value.total_count > 0,
+);
 
 const hasInvoices = computed(() =>
-    props.invoiceSummary.current > 0 || props.invoiceSummary.future > 0,
+    showingDemo.value
+    || invoiceSummary.value.current > 0
+    || invoiceSummary.value.future > 0,
+);
+
+const showInvestments = computed(() =>
+    showingDemo.value || summary.value.investments > 0,
 );
 
 const applyFilters = (event) => {
@@ -52,19 +86,59 @@ const applyFilters = (event) => {
         year: form.year.value,
     }, { preserveState: true });
 };
+
+const acceptWelcome = () => {
+    showWelcome.value = false;
+    startFirstSetup();
+};
+
+const skipWelcome = () => {
+    showWelcome.value = false;
+    skipOnboarding();
+};
+
+onMounted(() => {
+    if (isTourActive()) {
+        resumeIfActive();
+        return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const tourParam = params.get('tour');
+
+    if (tourParam === FIRST_SETUP_TOUR_ID) {
+        startFirstSetup();
+        return;
+    }
+
+    if (tourParam === DASHBOARD_TOUR_ID) {
+        startTour(DASHBOARD_TOUR_ID);
+        return;
+    }
+
+    const status = page.props.auth.user?.onboarding_status;
+    const forceWelcome = params.get('welcome') === '1';
+
+    if (status == null || forceWelcome) {
+        showWelcome.value = true;
+    }
+});
 </script>
 
 <template>
     <Head title="Dashboard" />
 
     <AppLayout>
-        <div class="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-6 sm:gap-4">
+        <TourDemoBanner :show="showingDemo" />
+
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-6 sm:gap-4" data-tour="dash-page">
             <div class="min-w-0">
                 <h1 class="text-lg font-bold text-navy-700 sm:text-2xl">Dashboard</h1>
                 <p class="hidden text-sm text-horizon-500 sm:block">Resumo do mês selecionado</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <form class="flex gap-2" @change="applyFilters">
+                <TourHelpButton :tour-id="DASHBOARD_TOUR_ID" />
+                <form class="flex gap-2" data-tour="dash-period" @change="applyFilters">
                     <select name="month" class="rounded-xl border-horizon-200 py-1.5 text-xs text-navy-700 sm:text-sm" :value="filters.month">
                         <option v-for="m in MONTHS" :key="m.value" :value="m.value">{{ m.label }}</option>
                     </select>
@@ -72,77 +146,82 @@ const applyFilters = (event) => {
                         <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
                     </select>
                 </form>
-                <Link :href="route('transactions.create')">
+                <Link :href="route('transactions.create')" data-tour="dash-new">
                     <PrimaryButton class="!px-3 !py-1.5 text-xs sm:!px-4 sm:!py-2.5 sm:text-sm">Nova</PrimaryButton>
                 </Link>
             </div>
         </div>
 
-        <div class="mb-4 rounded-[16px] bg-white px-4 py-3 shadow-soft sm:hidden">
-            <div class="flex items-center justify-between gap-3 border-b border-horizon-100 pb-2.5">
-                <span class="text-sm font-medium text-horizon-500">Saldo</span>
-                <span
-                    class="text-base font-bold tabular-nums"
-                    :class="summary.balance >= 0 ? 'text-emerald-600' : 'text-red-600'"
-                >
-                    {{ formatBRL(summary.balance) }}
-                </span>
-            </div>
-            <div class="mt-2.5 grid grid-cols-2 gap-3">
-                <div>
-                    <p class="text-xs font-medium text-horizon-500">Entradas</p>
-                    <p class="text-sm font-bold tabular-nums text-emerald-600">{{ formatBRL(summary.income) }}</p>
+        <div data-tour="dash-stats">
+            <div class="mb-4 rounded-[16px] bg-white px-4 py-3 shadow-soft sm:hidden">
+                <div class="flex items-center justify-between gap-3 border-b border-horizon-100 pb-2.5">
+                    <span class="text-sm font-medium text-horizon-500">Saldo</span>
+                    <span
+                        class="text-base font-bold tabular-nums"
+                        :class="summary.balance >= 0 ? 'text-emerald-600' : 'text-red-600'"
+                    >
+                        {{ formatBRL(summary.balance) }}
+                    </span>
                 </div>
-                <div class="text-right">
-                    <p class="text-xs font-medium text-horizon-500">Saídas</p>
-                    <p class="text-sm font-bold tabular-nums text-red-600">{{ formatBRL(summary.expense) }}</p>
+                <div class="mt-2.5 grid grid-cols-2 gap-3">
+                    <div>
+                        <p class="text-xs font-medium text-horizon-500">Entradas</p>
+                        <p class="text-sm font-bold tabular-nums text-emerald-600">{{ formatBRL(summary.income) }}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs font-medium text-horizon-500">Saídas</p>
+                        <p class="text-sm font-bold tabular-nums text-red-600">{{ formatBRL(summary.expense) }}</p>
+                    </div>
                 </div>
             </div>
-            <p class="mt-2.5 border-t border-horizon-100 pt-2 text-xs font-medium text-horizon-600">
+
+            <div class="mb-4 hidden gap-4 sm:mb-6 sm:grid sm:grid-cols-3">
+                <StatWidget
+                    title="Saldo do mês"
+                    :value="formatBRL(summary.balance)"
+                    :tone="summary.balance >= 0 ? 'positive' : 'negative'"
+                />
+                <StatWidget title="Entradas" :value="formatBRL(summary.income)" tone="positive" />
+                <StatWidget title="Saídas" :value="formatBRL(summary.expense)" tone="negative" />
+            </div>
+        </div>
+
+        <div data-tour="dash-cash">
+            <p class="mb-4 border-t border-horizon-100 pt-2 text-xs font-medium text-horizon-600 sm:hidden">
                 Fluxo de caixa
                 <span class="float-right font-semibold tabular-nums text-navy-700">{{ formatBRL(summary.cash_flow) }}</span>
             </p>
-            <p
-                v-if="summary.investments > 0"
-                class="mt-1.5 text-xs font-medium text-teal-700"
+            <div
+                class="mb-4 hidden rounded-[16px] bg-white px-4 py-2.5 shadow-soft sm:flex sm:items-center sm:justify-between"
             >
+                <div>
+                    <p class="text-sm font-medium text-horizon-600">Fluxo de caixa</p>
+                    <p class="text-xs text-horizon-500">Dinheiro que saiu da conta neste mês</p>
+                </div>
+                <p class="text-sm font-bold tabular-nums text-navy-700">{{ formatBRL(summary.cash_flow) }}</p>
+            </div>
+        </div>
+
+        <div v-if="showInvestments" data-tour="dash-invest">
+            <p class="mb-4 text-xs font-medium text-teal-700 sm:hidden">
                 Investimentos
                 <span class="float-right font-semibold tabular-nums">{{ formatBRL(summary.investments) }}</span>
             </p>
-        </div>
-
-        <div class="mb-4 hidden gap-4 sm:mb-6 sm:grid sm:grid-cols-3">
-            <StatWidget
-                title="Saldo do mês"
-                :value="formatBRL(summary.balance)"
-                :tone="summary.balance >= 0 ? 'positive' : 'negative'"
-            />
-            <StatWidget title="Entradas" :value="formatBRL(summary.income)" tone="positive" />
-            <StatWidget title="Saídas" :value="formatBRL(summary.expense)" tone="negative" />
-        </div>
-
-        <div class="mb-4 hidden rounded-[16px] bg-white px-4 py-2.5 shadow-soft sm:flex sm:items-center sm:justify-between">
-            <div>
-                <p class="text-sm font-medium text-horizon-600">Fluxo de caixa</p>
-                <p class="text-xs text-horizon-500">Dinheiro que saiu da conta neste mês</p>
+            <div
+                class="mb-4 hidden rounded-[16px] bg-teal-50 px-4 py-2.5 shadow-soft ring-1 ring-teal-100 sm:flex sm:items-center sm:justify-between"
+            >
+                <div>
+                    <p class="text-sm font-medium text-teal-800">Investimentos</p>
+                    <p class="text-xs text-teal-700/80">Aportes do mês (não entram nas Saídas de consumo)</p>
+                </div>
+                <p class="text-sm font-bold tabular-nums text-teal-900">{{ formatBRL(summary.investments) }}</p>
             </div>
-            <p class="text-sm font-bold tabular-nums text-navy-700">{{ formatBRL(summary.cash_flow) }}</p>
-        </div>
-
-        <div
-            v-if="summary.investments > 0"
-            class="mb-4 hidden rounded-[16px] bg-teal-50 px-4 py-2.5 shadow-soft ring-1 ring-teal-100 sm:flex sm:items-center sm:justify-between"
-        >
-            <div>
-                <p class="text-sm font-medium text-teal-800">Investimentos</p>
-                <p class="text-xs text-teal-700/80">Aportes do mês (não entram nas Saídas de consumo)</p>
-            </div>
-            <p class="text-sm font-bold tabular-nums text-teal-900">{{ formatBRL(summary.investments) }}</p>
         </div>
 
         <div
             v-if="hasInvoices"
             class="mb-4 rounded-[16px] bg-white px-4 py-3 shadow-soft"
+            data-tour="dash-invoices"
         >
             <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0 flex-1 space-y-1.5">
@@ -165,6 +244,7 @@ const applyFilters = (event) => {
         <div
             v-if="hasRecurring"
             class="mb-4 rounded-[16px] bg-white px-4 py-3 shadow-soft"
+            data-tour="dash-recurring"
         >
             <div class="flex items-center justify-between gap-2">
                 <div class="min-w-0">
@@ -213,11 +293,17 @@ const applyFilters = (event) => {
         </div>
 
         <h2 class="mb-2 text-base font-bold text-navy-700 sm:mb-3 sm:text-lg">Últimas transações</h2>
-        <Card extra="!bg-transparent !shadow-none md:!bg-white md:shadow-soft">
+        <Card extra="!bg-transparent !shadow-none md:!bg-white md:shadow-soft" data-tour="dash-recent">
             <TransactionList
                 :transactions="recentTransactions"
                 empty-message="Nenhuma transação neste mês."
             />
         </Card>
+
+        <WelcomeOnboardingModal
+            :show="showWelcome"
+            @accept="acceptWelcome"
+            @skip="skipWelcome"
+        />
     </AppLayout>
 </template>

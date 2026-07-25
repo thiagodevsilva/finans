@@ -37,6 +37,7 @@ class HandleInertiaRequests extends Middleware
                     'is_owner' => $user->isOwner(),
                     'is_admin' => $user->isAdmin(),
                     'account_id' => $user->account_id,
+                    'onboarding_status' => $user->onboarding_status,
                 ] : null,
                 'account' => $user?->account ? [
                     'id' => $user->account->id,

@@ -1,0 +1,108 @@
+/* Tema Levita para Shepherd.js — importado em app.js */
+
+.shepherd-levita.shepherd-element {
+    z-index: 10000;
+    max-width: 360px;
+    margin: 0;
+    border-radius: 16px;
+    border: 1px solid #e9edf7;
+    font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+    box-shadow: 0 12px 40px rgba(27, 37, 89, 0.18);
+    overflow: hidden;
+}
+
+.shepherd-levita .shepherd-content {
+    padding: 0;
+}
+
+.shepherd-levita .shepherd-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1.1rem 1.15rem 0.35rem;
+    background: transparent;
+}
+
+.shepherd-levita .shepherd-title {
+    flex: 1;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.35;
+    color: #1b2559;
+    letter-spacing: -0.2px;
+}
+
+.shepherd-levita .shepherd-text {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: #707eae;
+    padding: 0.35rem 1.15rem 1rem;
+}
+
+.shepherd-levita .shepherd-text p {
+    margin: 0;
+}
+
+.shepherd-levita .shepherd-text p + p {
+    margin-top: 0.5rem;
+}
+
+.shepherd-levita .shepherd-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.85rem 1.15rem 1.1rem;
+    border-top: 1px solid #eef1f8;
+    background: #fafbff;
+}
+
+.shepherd-levita .shepherd-button {
+    margin: 0;
+    border-radius: 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.2;
+    padding: 0.55rem 0.95rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.shepherd-levita .shepherd-button:not(.shepherd-button-secondary) {
+    background: #2563eb;
+    color: #fff;
+}
+
+.shepherd-levita .shepherd-button:not(.shepherd-button-secondary):hover {
+    background: #1d4ed8;
+}
+
+.shepherd-levita .shepherd-button-secondary {
+    background: #fff;
+    color: #1b2559;
+    border: 1px solid #e0e5f2;
+}
+
+.shepherd-levita .shepherd-button-secondary:hover {
+    background: #f4f7fe;
+}
+
+.shepherd-levita .shepherd-cancel-icon {
+    margin: 0;
+    color: #a3aed0;
+}
+
+.shepherd-levita .shepherd-cancel-icon:hover {
+    color: #1b2559;
+}
+
+.shepherd-levita .shepherd-arrow:before {
+    background: #fff;
+    border: 1px solid #e9edf7;
+}
+
+.shepherd-modal-overlay-container {
+    z-index: 9990;
+}

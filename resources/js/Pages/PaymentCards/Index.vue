@@ -5,8 +5,11 @@ import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { formatBRL, formatDate } from '@/utils/format';
+import { useAppTour } from '@/Composables/useAppTour';
+import TourHelpButton from '@/Components/TourHelpButton.vue';
+import { FIRST_SETUP_TOUR_ID } from '@/tours/firstSetup';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
     cards: Array,
@@ -24,6 +27,7 @@ const props = defineProps({
 
 const page = usePage();
 const userId = computed(() => page.props.auth.user.id);
+const { resumeIfActive, startTour, isTourActive } = useAppTour();
 
 const editing = ref(null);
 const showForm = ref(false);
@@ -125,6 +129,23 @@ const destroy = (card) => {
 };
 
 const payInvoiceHref = route('transactions.create', { type: 'transfer' });
+
+onMounted(async () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tour') === FIRST_SETUP_TOUR_ID) {
+        openCreateForm();
+        await nextTick();
+    }
+
+    if (isTourActive()) {
+        resumeIfActive();
+        return;
+    }
+
+    if (params.get('tour') === FIRST_SETUP_TOUR_ID) {
+        startTour(FIRST_SETUP_TOUR_ID);
+    }
+});
 </script>
 
 <template>
@@ -137,6 +158,7 @@ const payInvoiceHref = route('transactions.create', { type: 'transfer' });
                 <p class="text-sm text-horizon-500">Cadastre cartões e acompanhe pagamentos de fatura</p>
             </div>
             <div class="flex flex-wrap items-center gap-3">
+                <TourHelpButton :tour-id="FIRST_SETUP_TOUR_ID" />
                 <Link :href="payInvoiceHref" class="text-sm font-semibold text-cta hover:underline">
                     Pagar fatura
                 </Link>
@@ -149,6 +171,7 @@ const payInvoiceHref = route('transactions.create', { type: 'transfer' });
         <form
             v-if="showForm"
             ref="formPanel"
+            data-tour="pc-form"
             class="mb-8 grid max-w-4xl scroll-mt-4 gap-3 rounded-[20px] bg-white p-5 shadow-soft sm:grid-cols-2 lg:grid-cols-3"
             @submit.prevent="submit"
         >
@@ -157,7 +180,7 @@ const payInvoiceHref = route('transactions.create', { type: 'transfer' });
                     {{ editing ? 'Editar cartão' : 'Novo cartão' }}
                 </h2>
             </div>
-            <div class="lg:col-span-2">
+            <div class="lg:col-span-2" data-tour="pc-name">
                 <InputLabel value="Nome do cartão" />
                 <TextInput class="mt-1 block w-full" v-model="form.name" placeholder="Ex.: Nubank Roxinho" required />
                 <InputError class="mt-1" :message="form.errors.name" />
@@ -187,7 +210,7 @@ const payInvoiceHref = route('transactions.create', { type: 'transfer' });
                 />
                 <InputError class="mt-1" :message="form.errors.last_four" />
             </div>
-            <div>
+            <div data-tour="pc-bank-account">
                 <InputLabel value="Conta (opcional)" />
                 <select v-model="form.bank_account_id" class="mt-1 block w-full rounded-xl border-horizon-200 text-sm text-navy-700">
                     <option value="">Sem conta</option>
@@ -203,18 +226,23 @@ const payInvoiceHref = route('transactions.create', { type: 'transfer' });
                 <InputError class="mt-1" :message="form.errors.color" />
             </div>
             <template v-if="form.type === 'credit'">
-                <div>
-                    <InputLabel value="Dia de fechamento" />
-                    <TextInput class="mt-1 block w-full" type="number" min="1" max="31" v-model="form.closing_day" required />
-                    <InputError class="mt-1" :message="form.errors.closing_day" />
-                </div>
-                <div>
-                    <InputLabel value="Dia de vencimento" />
-                    <TextInput class="mt-1 block w-full" type="number" min="1" max="31" v-model="form.due_day" required />
-                    <InputError class="mt-1" :message="form.errors.due_day" />
+                <div
+                    data-tour="pc-credit-days"
+                    class="grid gap-3 sm:col-span-2 sm:grid-cols-2 lg:col-span-2"
+                >
+                    <div>
+                        <InputLabel value="Dia de fechamento" />
+                        <TextInput class="mt-1 block w-full" type="number" min="1" max="31" v-model="form.closing_day" required />
+                        <InputError class="mt-1" :message="form.errors.closing_day" />
+                    </div>
+                    <div>
+                        <InputLabel value="Dia de vencimento" />
+                        <TextInput class="mt-1 block w-full" type="number" min="1" max="31" v-model="form.due_day" required />
+                        <InputError class="mt-1" :message="form.errors.due_day" />
+                    </div>
                 </div>
             </template>
-            <div class="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
+            <div class="flex items-end gap-2 sm:col-span-2 lg:col-span-3" data-tour="pc-submit">
                 <PrimaryButton :disabled="form.processing">{{ editing ? 'Salvar' : 'Adicionar cartão' }}</PrimaryButton>
                 <button type="button" class="text-sm text-horizon-600 underline" @click="cancelEdit">Cancelar</button>
             </div>

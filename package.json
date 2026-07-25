@@ -19,6 +19,8 @@
     },
     "dependencies": {
         "chart.js": "^4.5.1",
-        "vue-chartjs": "^5.3.4"
+        "shepherd.js": "^15.2.2",
+        "vue-chartjs": "^5.3.4",
+        "vue-shepherd": "^6.0.0"
     }
 }

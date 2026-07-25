@@ -20,6 +20,10 @@ class User extends Authenticatable
 
     public const ONLINE_MINUTES = 29;
 
+    public const ONBOARDING_SKIPPED = 'skipped';
+
+    public const ONBOARDING_COMPLETED = 'completed';
+
     protected $fillable = [
         'account_id',
         'name',
@@ -28,6 +32,7 @@ class User extends Authenticatable
         'role',
         'is_admin',
         'last_seen_at',
+        'onboarding_status',
     ];
 
     protected $hidden = [

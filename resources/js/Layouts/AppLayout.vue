@@ -1,5 +1,6 @@
 <script setup>
 import AppMark from '@/Components/AppMark.vue';
+import { useAppTour } from '@/Composables/useAppTour';
 import { computed, ref } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 
@@ -8,19 +9,25 @@ const user = computed(() => page.props.auth.user);
 const account = computed(() => page.props.auth.account);
 const flash = computed(() => page.props.flash);
 const mobileOpen = ref(false);
+const { restartOnboarding } = useAppTour();
 
 const links = [
     { name: 'Dashboard', route: 'dashboard', match: 'dashboard' },
     { name: 'Transações', route: 'transactions.index', match: 'transactions.*' },
     { name: 'Contas fixas', route: 'recurring-bills.index', match: 'recurring-bills.*' },
-    { name: 'Contas', route: 'bank-accounts.index', match: 'bank-accounts.*' },
-    { name: 'Cartões', route: 'payment-cards.index', match: 'payment-cards.*' },
+    { name: 'Contas', route: 'bank-accounts.index', match: 'bank-accounts.*', tour: 'nav-bank-accounts' },
+    { name: 'Cartões', route: 'payment-cards.index', match: 'payment-cards.*', tour: 'nav-payment-cards' },
     { name: 'Categorias', route: 'categories.index', match: 'categories.*' },
     { name: 'Dependentes', route: 'members.index', match: 'members.*' },
     { name: 'Relatórios', route: 'reports.index', match: 'reports.*' },
 ];
 
 const isActive = (match) => route().current(match);
+
+const replayGuide = () => {
+    mobileOpen.value = false;
+    restartOnboarding();
+};
 </script>
 
 <template>
@@ -46,6 +53,7 @@ const isActive = (match) => route().current(match);
                     :key="link.route"
                     :href="route(link.route)"
                     class="relative mb-2 flex items-center px-8 py-2 hover:cursor-pointer"
+                    :data-tour="link.tour || undefined"
                     @click="mobileOpen = false"
                 >
                     <span
@@ -65,6 +73,13 @@ const isActive = (match) => route().current(match);
                 <p class="text-sm font-bold text-navy-700">{{ user?.name }}</p>
                 <p class="text-xs text-horizon-500">{{ user?.is_owner ? 'Dono da conta' : 'Dependente' }}</p>
                 <div class="mt-3 flex flex-col gap-1 text-sm">
+                    <button
+                        type="button"
+                        class="text-left font-medium text-cta hover:underline"
+                        @click="replayGuide"
+                    >
+                        Refazer guia
+                    </button>
                     <Link :href="route('profile.edit')" class="font-medium text-cta hover:underline">Perfil</Link>
                     <Link :href="route('logout')" method="post" as="button" class="text-left font-medium text-horizon-600 hover:underline">
                         Sair
