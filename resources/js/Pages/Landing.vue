@@ -132,7 +132,7 @@ const jsonLd = computed(() =>
         <meta head-key="twitter:description" name="twitter:description" :content="seoDescription" />
         <meta head-key="twitter:image" name="twitter:image" :content="ogImage" />
 
-        <script type="application/ld+json">{{ jsonLd }}</script>
+        <component :is="'script'" type="application/ld+json" v-text="jsonLd" />
     </Head>
 
     <div class="overflow-x-hidden bg-white font-sans text-navy-700 antialiased">
@@ -185,7 +185,7 @@ const jsonLd = computed(() =>
                     <div class="mt-8 flex flex-wrap items-center gap-3">
                         <Link
                             :href="route('register')"
-                            class="rounded-xl bg-cta px-6 py-3 text-base font-semibold text-white hover:bg-cta-dark"
+                            class="rounded-xl border border-white px-6 py-3 text-base font-semibold text-white hover:bg-white/10"
                         >
                             Começar agora (É grátis)
                         </Link>
@@ -201,10 +201,11 @@ const jsonLd = computed(() =>
                     <img
                         src="/images/capa-mulher.png"
                         alt="Levita — app de finanças gratuito para famílias"
-                        class="absolute bottom-0 left-1/2 h-full max-h-[520px] w-auto max-w-none -translate-x-1/2 object-contain object-bottom"
+                        class="absolute bottom-0 left-1/2 h-[min(100%,520px)] w-auto max-w-none -translate-x-1/2 object-contain object-bottom"
+                        style="aspect-ratio: 1024 / 1536;"
                         draggable="false"
-                        width="640"
-                        height="520"
+                        width="1024"
+                        height="1536"
                         fetchpriority="high"
                     >
                 </div>
@@ -213,14 +214,14 @@ const jsonLd = computed(() =>
 
         <section class="border-b border-[#e5e5e5] py-16">
             <div class="mx-auto grid max-w-6xl items-center gap-10 px-4 md:grid-cols-2">
-                <div>
+                <div class="overflow-hidden rounded-2.5xl bg-gradient-to-br from-lightPrimary to-brand-50 shadow-soft transition duration-300 hover:shadow-lg">
                     <img
                         src="/images/saiba.png"
                         alt="Controle de gastos e categorias no Levita"
-                        class="mx-auto max-h-72"
+                        class="aspect-[4/3] w-full object-cover transition duration-500 hover:scale-[1.02]"
                         loading="lazy"
-                        width="480"
-                        height="288"
+                        width="1536"
+                        height="1024"
                     >
                 </div>
                 <div>
@@ -240,14 +241,14 @@ const jsonLd = computed(() =>
                         Convide o seu cônjuge ou familiares para somar. Todo mundo participa registrando os gastos do dia a dia, enquanto você mantém o controle total das configurações.
                     </p>
                 </div>
-                <div class="order-1 md:order-2">
+                <div class="order-1 overflow-hidden rounded-2.5xl bg-gradient-to-br from-lightPrimary to-brand-50 shadow-soft transition duration-300 hover:shadow-lg md:order-2">
                     <img
                         src="/images/juros.png"
                         alt="Orçamento familiar compartilhado no Levita"
-                        class="mx-auto max-h-72"
+                        class="aspect-[4/3] w-full object-cover transition duration-500 hover:scale-[1.02]"
                         loading="lazy"
-                        width="480"
-                        height="288"
+                        width="1536"
+                        height="1024"
                     >
                 </div>
             </div>
@@ -257,18 +258,45 @@ const jsonLd = computed(() =>
             <div class="mx-auto max-w-6xl px-4 text-center">
                 <h2 class="text-3xl font-bold">Por que escolher um app de finanças gratuito e simples?</h2>
                 <div class="mt-12 grid gap-10 md:grid-cols-3">
-                    <div>
-                        <img src="/images/facil.png" alt="Interface simples do Levita" class="mx-auto h-20" loading="lazy" width="80" height="80">
+                    <div class="group">
+                        <div class="mx-auto overflow-hidden rounded-2.5xl bg-gradient-to-br from-lightPrimary to-brand-50 shadow-soft transition duration-300 group-hover:shadow-lg">
+                            <img
+                                src="/images/facil.png"
+                                alt="Interface simples do Levita"
+                                class="aspect-square w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                                loading="lazy"
+                                width="1024"
+                                height="1024"
+                            >
+                        </div>
                         <h3 class="mt-4 text-xl font-semibold">Simples de usar</h3>
                         <p class="mt-2 text-slate-600">Interface limpa, intuitiva e em português. Sem planilhas confusas ou funções desnecessárias.</p>
                     </div>
-                    <div>
-                        <img src="/images/economize.png" alt="Visão clara do orçamento no Levita" class="mx-auto h-20" loading="lazy" width="80" height="80">
+                    <div class="group">
+                        <div class="mx-auto overflow-hidden rounded-2.5xl bg-gradient-to-br from-lightPrimary to-brand-50 shadow-soft transition duration-300 group-hover:shadow-lg">
+                            <img
+                                src="/images/economize.png"
+                                alt="Visão clara do orçamento no Levita"
+                                class="aspect-square w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                                loading="lazy"
+                                width="1024"
+                                height="1024"
+                            >
+                        </div>
                         <h3 class="mt-4 text-xl font-semibold">Visão clara do mês</h3>
                         <p class="mt-2 text-slate-600">Gráficos práticos e relatórios diretos para você entender para onde o orçamento está indo com um olhar.</p>
                     </div>
-                    <div>
-                        <img src="/images/suporte.png" alt="Finanças em família no Levita" class="mx-auto h-20" loading="lazy" width="80" height="80">
+                    <div class="group">
+                        <div class="mx-auto overflow-hidden rounded-2.5xl bg-gradient-to-br from-lightPrimary to-brand-50 shadow-soft transition duration-300 group-hover:shadow-lg">
+                            <img
+                                src="/images/suporte.png"
+                                alt="Finanças em família no Levita"
+                                class="aspect-square w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                                loading="lazy"
+                                width="1024"
+                                height="1024"
+                            >
+                        </div>
                         <h3 class="mt-4 text-xl font-semibold">Feito para colaborar</h3>
                         <p class="mt-2 text-slate-600">Acesso simultâneo para quem mora com você, com permissões claras e seguras para cada perfil — e sem cobrar por isso.</p>
                     </div>
@@ -297,7 +325,7 @@ const jsonLd = computed(() =>
                     <template v-else>
                         <Link
                             :href="route('register')"
-                            class="rounded-xl bg-cta px-6 py-3 text-base font-semibold text-white hover:bg-cta-dark"
+                            class="rounded-xl border border-white px-6 py-3 text-base font-semibold text-white hover:bg-white/10"
                         >
                             Começar agora (É grátis)
                         </Link>

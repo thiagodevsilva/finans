@@ -4,29 +4,37 @@ export const FIRST_SETUP_TOUR_ID = 'first-setup';
  * Steps declarativos do tour first-setup.
  * Espelho de docs/onboarding.md — manter sincronizado.
  *
- * Tom: passeio explicativo. Cadastro é opcional durante o guia.
+ * Tom: passeio explicativo. Cadastro é opcional durante o tutorial.
+ * Evitar : e ; na copy voltada ao usuário.
  */
 export const firstSetupSteps = [
     {
+        id: 'fs-welcome',
+        route: 'dashboard',
+        title: 'Bem-vindo ao Levita',
+        text: 'Seja bem-vindo ao Levita, um app simples pra você que quer ter controle total! Aqui contas e cartões são representações. Não integramos com o banco. Você nos passa a realidade. Vamos conhecer as telas. Cadastrar é opcional.',
+    },
+    {
         id: 'dash-nav-contas',
         route: 'dashboard',
-        attachTo: { element: '[data-tour="nav-bank-accounts"]', on: 'right' },
+        attachTo: { element: '[data-tour="nav-bank-accounts"]', on: 'bottom' },
+        openSidebar: true,
         title: 'Comece pelas contas',
-        text: 'Contas bancárias são o ponto de partida: entradas, PIX e vínculo com cartões. Vamos só conhecer as telas — cadastrar é opcional.',
+        text: 'Contas bancárias são o ponto de partida para entradas, PIX e vínculo com cartões. Vamos só conhecer as telas. Cadastrar é opcional.',
     },
     {
         id: 'ba-intro',
         route: 'bank-accounts.index',
         attachTo: { element: '[data-tour="ba-page"]', on: 'bottom' },
         title: 'Suas contas',
-        text: 'Aqui ficam as contas da família (ex.: Nubank Conta). Não precisa preencher agora: pode só seguir o guia e criar depois.',
+        text: 'Aqui ficam as contas da família, por exemplo Nubank Conta. Não precisa preencher agora. Pode só seguir o tutorial e criar depois.',
     },
     {
         id: 'ba-name',
         route: 'bank-accounts.index',
         attachTo: { element: '[data-tour="ba-name"]', on: 'bottom' },
         title: 'Nome da conta',
-        text: 'Quando for cadastrar, use um nome fácil de reconhecer. No guia, pode avançar sem digitar.',
+        text: 'Quando for cadastrar, use um nome fácil de reconhecer. No tutorial, pode avançar sem digitar.',
     },
     {
         id: 'ba-color',
@@ -40,7 +48,7 @@ export const firstSetupSteps = [
         route: 'bank-accounts.index',
         attachTo: { element: '[data-tour="ba-submit"]', on: 'top' },
         title: 'Adicionar',
-        text: 'Este botão salva a conta. No passeio, pode seguir sem cadastrar — o próximo passo mostra os cartões.',
+        text: 'Este botão salva a conta. No passeio, pode seguir sem cadastrar. O próximo passo mostra os cartões.',
     },
     {
         id: 'pc-intro',
@@ -48,7 +56,7 @@ export const firstSetupSteps = [
         query: { tour: FIRST_SETUP_TOUR_ID },
         attachTo: { element: '[data-tour="pc-form"]', on: 'bottom' },
         title: 'Cartões',
-        text: 'Mesma ideia: aqui você cadastra crédito e débito. O guia não exige salvar nada — é só para você ver onde fica.',
+        text: 'Mesma ideia. Aqui você cadastra crédito e débito. O tutorial não exige salvar nada. É só para você ver onde fica.',
     },
     {
         id: 'pc-name',
@@ -56,7 +64,7 @@ export const firstSetupSteps = [
         query: { tour: FIRST_SETUP_TOUR_ID },
         attachTo: { element: '[data-tour="pc-name"]', on: 'bottom' },
         title: 'Nome do cartão',
-        text: 'Ex.: Nubank Roxinho. Preencha só se quiser cadastrar agora.',
+        text: 'Por exemplo Nubank Roxinho. Preencha só se quiser cadastrar agora.',
     },
     {
         id: 'pc-bank',
@@ -72,7 +80,7 @@ export const firstSetupSteps = [
         query: { tour: FIRST_SETUP_TOUR_ID },
         attachTo: { element: '[data-tour="pc-credit-days"]', on: 'bottom' },
         title: 'Fechamento e vencimento',
-        text: 'Só no crédito: definem em qual fatura cada compra entra.',
+        text: 'Só no crédito. Esses dias definem em qual fatura cada compra entra.',
     },
     {
         id: 'pc-done',
@@ -80,7 +88,7 @@ export const firstSetupSteps = [
         query: { tour: FIRST_SETUP_TOUR_ID },
         attachTo: { element: '[data-tour="pc-submit"]', on: 'top' },
         title: 'Pronto',
-        text: 'Base pronta. Depois você pode ver o guia do Dashboard ou de Transações pelo botão Ajuda em cada tela.',
+        text: 'Base pronta. Em seguida vamos ao painel do mês, o Dashboard.',
     },
 ];
 

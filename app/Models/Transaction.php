@@ -36,11 +36,17 @@ class Transaction extends Model
 
     public const PAYMENT_CARD = 'card';
 
+    public const PAYMENT_DEBIT = 'debit';
+
+    public const PAYMENT_AUTO_DEBIT = 'auto_debit';
+
     public const PAYMENT_METHODS = [
         self::PAYMENT_CASH,
         self::PAYMENT_PIX,
         self::PAYMENT_TRANSFER,
         self::PAYMENT_CARD,
+        self::PAYMENT_DEBIT,
+        self::PAYMENT_AUTO_DEBIT,
     ];
 
     /** Formas de pagamento permitidas para aporte (sem cartão). */
@@ -48,6 +54,16 @@ class Transaction extends Model
         self::PAYMENT_CASH,
         self::PAYMENT_PIX,
         self::PAYMENT_TRANSFER,
+        self::PAYMENT_DEBIT,
+        self::PAYMENT_AUTO_DEBIT,
+    ];
+
+    /** Métodos que tipicamente podem vincular conta bancária. */
+    public const BANK_LINKED_PAYMENT_METHODS = [
+        self::PAYMENT_PIX,
+        self::PAYMENT_TRANSFER,
+        self::PAYMENT_DEBIT,
+        self::PAYMENT_AUTO_DEBIT,
     ];
 
     protected $fillable = [
@@ -140,6 +156,8 @@ class Transaction extends Model
             self::PAYMENT_PIX => 'PIX',
             self::PAYMENT_TRANSFER => 'Transferência',
             self::PAYMENT_CARD => 'Cartão',
+            self::PAYMENT_DEBIT => 'Débito',
+            self::PAYMENT_AUTO_DEBIT => 'Débito automático',
             default => $method,
         };
     }

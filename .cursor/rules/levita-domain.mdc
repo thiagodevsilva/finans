@@ -7,7 +7,7 @@ alwaysApply: true
 
 ## Isolamento
 
-- Toda query de Category, Transaction, PaymentCard, BankAccount, CreditCardInvoice, InstallmentPlan, RecurringBill e listagem de User (membros) deve filtrar por `account_id` do usuário autenticado.
+- Toda query de Category, Transaction, PaymentCard, BankAccount, BalanceAnchor, CreditCardInvoice, InstallmentPlan, RecurringBill e listagem de User (membros) deve filtrar por `account_id` do usuário autenticado.
 - Use o trait `BelongsToAccount` / global scope. Nunca confie só no ID da URL.
 
 ## Papéis
@@ -33,6 +33,7 @@ alwaysApply: true
 | Ver / criar conta fixa | sim | sim |
 | Editar/excluir qualquer conta fixa | sim | não |
 | Editar/excluir própria conta fixa | sim | sim |
+| Informar / atualizar saldo de caixa | sim | não (só visualizar) |
 | Adicionar/remover dependentes | sim | não |
 
 ## Contabilidade
@@ -41,6 +42,9 @@ alwaysApply: true
 - Pagamento de fatura = `transfer` (não conta em gastos; `category_id` null).
 - Cartão de crédito exige `closing_day` e `due_day`.
 - Contas fixas geram `planned`; só `confirmed` entra em dashboard/relatórios.
+- **Saldo (caixa)** = âncora + entradas − saídas de dinheiro (PIX/dinheiro/transferência/débito/débito automático/fatura/investimento). Crédito não reduz até pagar a fatura.
+- **Saldo do mês** = income − expense − investment (confirmed).
+- Débito e débito automático saem do caixa.
 
 ## Conta
 

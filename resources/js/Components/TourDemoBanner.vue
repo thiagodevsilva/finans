@@ -15,7 +15,7 @@ defineProps({
     >
         <p class="font-semibold">Modo demonstração</p>
         <p class="mt-0.5 text-amber-900/80">
-            Os dados desta tela são exemplos para o guia. Nada será salvo.
+            Os dados desta tela são exemplos para o tutorial. Nada será salvo.
         </p>
     </div>
 </template>

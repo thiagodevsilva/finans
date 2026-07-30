@@ -16,6 +16,8 @@ export const PAYMENT_METHODS = [
     { value: 'cash', label: 'Dinheiro' },
     { value: 'pix', label: 'PIX' },
     { value: 'transfer', label: 'Transferência' },
+    { value: 'debit', label: 'Débito' },
+    { value: 'auto_debit', label: 'Débito automático' },
 ];
 
 const PAYMENT_METHOD_LABELS = {
@@ -23,7 +25,15 @@ const PAYMENT_METHOD_LABELS = {
     pix: 'PIX',
     transfer: 'Transferência',
     card: 'Cartão',
+    debit: 'Débito',
+    auto_debit: 'Débito automático',
 };
+
+const BANK_LINKED_METHODS = new Set(['pix', 'transfer', 'debit', 'auto_debit']);
+
+export function needsBankAccount(method) {
+    return BANK_LINKED_METHODS.has(method);
+}
 
 export function paymentLabel(tx) {
     if (!tx) return '';
@@ -45,7 +55,7 @@ export function paymentLabel(tx) {
     if (tx.payment_method === 'card' && tx.payment_card) {
         return formatCardLabel(tx.payment_card);
     }
-    if ((tx.payment_method === 'pix' || tx.payment_method === 'transfer') && tx.bank_account?.name) {
+    if (BANK_LINKED_METHODS.has(tx.payment_method) && tx.bank_account?.name) {
         return `${PAYMENT_METHOD_LABELS[tx.payment_method]} · ${tx.bank_account.name}`;
     }
     return PAYMENT_METHOD_LABELS[tx.payment_method] || tx.payment_method || '—';

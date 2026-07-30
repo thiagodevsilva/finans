@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminDashboardController;
+use App\Http\Controllers\BalanceAnchorController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
@@ -73,6 +74,9 @@ Route::middleware(['auth', 'last.seen'])->group(function () {
 
     Route::middleware('family')->group(function () {
         Route::get('/dashboard', DashboardController::class)->name('dashboard');
+
+        Route::post('/balance-anchors', [BalanceAnchorController::class, 'store'])->name('balance-anchors.store');
+        Route::post('/balance-anchors/keep', [BalanceAnchorController::class, 'keep'])->name('balance-anchors.keep');
 
         Route::post('/onboarding', [OnboardingController::class, 'store'])->name('onboarding.store');
         Route::delete('/onboarding', [OnboardingController::class, 'destroy'])->name('onboarding.destroy');

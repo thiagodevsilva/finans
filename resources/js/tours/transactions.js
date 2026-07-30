@@ -43,7 +43,7 @@ export const transactionsSteps = [
         query: { tour: TRANSACTIONS_TOUR_ID },
         attachTo: { element: '[data-tour="tx-types"]', on: 'bottom' },
         title: 'Tipos de lançamento',
-        text: 'São quatro: Saída, Entrada, Investimento e Pagamento de fatura. O formulário muda conforme o tipo.',
+        text: 'São quatro tipos. Saída (gasto), Entrada, Investimento e Pagamento de fatura. O formulário muda conforme o tipo.',
         onShow: ({ setFormType }) => setFormType('expense'),
     },
     {
@@ -51,8 +51,8 @@ export const transactionsSteps = [
         route: 'transactions.create',
         query: { tour: TRANSACTIONS_TOUR_ID },
         attachTo: { element: '[data-tour="tx-types"]', on: 'bottom' },
-        title: 'Saída',
-        text: 'Gastos do dia a dia. No crédito, a compra entra na fatura pela data; no PIX/débito, sai do caixa na hora.',
+        title: 'Saída (gasto)',
+        text: 'Compras do dia a dia. No crédito, entra na fatura pela data da compra. No PIX, dinheiro, débito ou débito automático, sai do caixa na hora.',
         onShow: ({ setFormType }) => setFormType('expense'),
     },
     {
@@ -61,7 +61,7 @@ export const transactionsSteps = [
         query: { tour: TRANSACTIONS_TOUR_ID },
         attachTo: { element: '[data-tour="tx-payment"]', on: 'bottom' },
         title: 'Pagamento e cartão',
-        text: 'Escolha dinheiro, PIX, transferência ou um cartão cadastrado. No crédito, fechamento/vencimento definem a fatura.',
+        text: 'Escolha dinheiro, PIX, transferência, débito, débito automático ou um cartão cadastrado. No crédito, fechamento e vencimento definem a fatura.',
         onShow: ({ setFormType, setPaymentSelection }) => {
             setFormType('expense');
             setPaymentSelection('cash');
@@ -73,7 +73,7 @@ export const transactionsSteps = [
         query: { tour: TRANSACTIONS_TOUR_ID },
         attachTo: { element: '[data-tour="tx-bank"]', on: 'bottom' },
         title: 'Conta bancária',
-        text: 'Com PIX ou transferência, você pode indicar de qual conta saiu. Ajuda no controle — e é opcional.',
+        text: 'Com PIX, transferência, débito ou débito automático, você pode indicar de qual conta saiu. Ajuda no controle e é opcional.',
         onShow: ({ setFormType, setPaymentSelection }) => {
             setFormType('expense');
             setPaymentSelection('pix');
@@ -85,7 +85,7 @@ export const transactionsSteps = [
         query: { tour: TRANSACTIONS_TOUR_ID },
         attachTo: { element: '[data-tour="tx-types"]', on: 'bottom' },
         title: 'Entrada',
-        text: 'Salário, freelance, reembolso… Aumenta o saldo do mês. Dá para vincular a uma conta.',
+        text: 'Salário, freelance, reembolso. Aumenta o saldo do mês. Dá para vincular a uma conta.',
         onShow: ({ setFormType }) => setFormType('income'),
     },
     {
@@ -94,7 +94,7 @@ export const transactionsSteps = [
         query: { tour: TRANSACTIONS_TOUR_ID },
         attachTo: { element: '[data-tour="tx-types"]', on: 'bottom' },
         title: 'Investimento',
-        text: 'Aporte que sai do caixa, mas não conta como Saída de consumo. Aparece separado no Dashboard.',
+        text: 'Aporte que sai do caixa, mas não conta como gasto de consumo. Entra no saldo do mês como saída e reduz o saldo de caixa.',
         onShow: ({ setFormType }) => setFormType('investment'),
     },
     {
@@ -103,7 +103,7 @@ export const transactionsSteps = [
         query: { tour: TRANSACTIONS_TOUR_ID },
         attachTo: { element: '[data-tour="tx-types"]', on: 'bottom' },
         title: 'Pagamento de fatura',
-        text: 'Quita (ou paga parcialmente) a fatura de um cartão de crédito. Escolha o cartão e a forma (PIX, outro cartão…).',
+        text: 'Quita ou paga parcialmente a fatura de um cartão de crédito. Escolha o cartão e a forma, como PIX, débito ou outro cartão.',
         onShow: ({ setFormType }) => setFormType('transfer'),
     },
     {
@@ -112,7 +112,7 @@ export const transactionsSteps = [
         query: { tour: TRANSACTIONS_TOUR_ID },
         attachTo: { element: '[data-tour="tx-submit"]', on: 'top' },
         title: 'Salvar de verdade',
-        text: 'No uso normal, este botão grava o lançamento. Neste guia ele fica bloqueado — pode concluir sem medo.',
+        text: 'No uso normal, este botão grava o lançamento. Neste tutorial ele fica bloqueado. Pode concluir sem medo.',
         onShow: ({ setFormType }) => setFormType('expense'),
     },
 ];

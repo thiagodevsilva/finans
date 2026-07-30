@@ -5,7 +5,7 @@ import InputLabel from '@/Components/InputLabel.vue';
 import MoneyInput from '@/Components/MoneyInput.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
-import { PAYMENT_METHODS, formatCardLabel, formatBRL } from '@/utils/format';
+import { PAYMENT_METHODS, formatCardLabel, formatBRL, needsBankAccount as isBankLinkedMethod } from '@/utils/format';
 import { useAppTour } from '@/Composables/useAppTour';
 import { useTourDemo } from '@/Composables/useTourDemo';
 import { TRANSACTIONS_TOUR_ID } from '@/tours/transactions';
@@ -151,7 +151,7 @@ const invoicePaymentMethods = [
 ];
 
 const needsBankAccount = computed(() =>
-    form.payment_method === 'pix' || form.payment_method === 'transfer',
+    isBankLinkedMethod(form.payment_method),
 );
 
 const isInvestment = computed(() => form.type === 'investment');
@@ -202,7 +202,7 @@ watch(
         if (form.type === 'investment') {
             form.payment_method = value;
             form.payment_card_id = null;
-            if (value !== 'pix' && value !== 'transfer') {
+            if (!isBankLinkedMethod(value)) {
                 form.bank_account_id = '';
             }
             return;
@@ -214,7 +214,7 @@ watch(
             form.payment_method = value;
             form.payment_card_id = null;
         }
-        if (value !== 'pix' && value !== 'transfer') {
+        if (!isBankLinkedMethod(value)) {
             form.bank_account_id = '';
         }
     },
@@ -225,7 +225,7 @@ watch(
     () => form.payment_method,
     (method) => {
         if (form.type !== 'transfer') return;
-        if (method !== 'pix' && method !== 'transfer') {
+        if (!isBankLinkedMethod(method)) {
             form.bank_account_id = '';
         }
     },
@@ -265,7 +265,7 @@ watch(
         if (type === 'transfer') {
             form.category_id = '';
             form.payment_selection = 'cash';
-            if (!['cash', 'pix', 'transfer', 'card'].includes(form.payment_method)) {
+            if (!['cash', 'pix', 'transfer', 'card', 'debit', 'auto_debit'].includes(form.payment_method)) {
                 form.payment_method = 'pix';
             }
             if (!needsBankAccount.value) {
@@ -471,7 +471,7 @@ const submit = () => {
                     </select>
                     <InputError class="mt-2" :message="form.errors.payment_method" />
                     <p class="mt-1 text-xs text-horizon-500">
-                        Pode ser PIX, transferência, dinheiro ou até outro cartão.
+                        PIX, transferência, dinheiro, débito ou até outro cartão.
                     </p>
                 </div>
                 <div v-if="needsBankAccount">
@@ -542,7 +542,7 @@ const submit = () => {
                     <InputError class="mt-2" :message="form.errors.date" />
                 </div>
                 <p class="text-xs text-horizon-500">
-                    Conta como saída de caixa, mas não entra nas Saídas de consumo — fica no montante de Investimentos.
+                    Conta como saída de caixa, mas não entra nos gastos de consumo — fica separado como investimento.
                 </p>
             </template>
 
@@ -743,7 +743,7 @@ const submit = () => {
 
             <div data-tour="tx-submit">
                 <PrimaryButton :disabled="form.processing || showingDemo">
-                    {{ showingDemo ? 'Bloqueado no guia' : (isEdit ? 'Salvar' : 'Criar') }}
+                    {{ showingDemo ? 'Bloqueado no tutorial' : (isEdit ? 'Salvar' : 'Criar') }}
                 </PrimaryButton>
             </div>
         </form>

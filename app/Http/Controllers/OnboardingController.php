@@ -31,6 +31,6 @@ class OnboardingController extends Controller
             'onboarding_status' => null,
         ]);
 
-        return redirect()->route('dashboard', ['tour' => 'first-setup']);
+        return redirect()->back();
     }
 }

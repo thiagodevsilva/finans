@@ -90,10 +90,12 @@ class BillingFeaturesTest extends TestCase
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
             ->where('summary.expense', 50)
-            ->where('summary.cash_flow', 50)
-            ->where('summary.balance', -50)
+            ->where('summary.expense_credit', 50)
+            ->where('summary.expense_debit', 0)
+            ->where('summary.month_balance', -50)
             ->where('summary.income', 0)
-            ->where('invoiceSummary.current', 0)
+            ->where('balanceMeta.needs_initial', true)
+            ->where('summary.balance', null)
         );
     }
 
@@ -179,10 +181,11 @@ class BillingFeaturesTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('summary.expense', 482)
-                ->where('summary.cash_flow', 1457)
-                ->where('summary.balance', -482)
-                ->where('invoiceSummary.current', 0)
-                ->where('invoiceSummary.future', 10)
+                ->where('summary.expense_credit', 25)
+                ->where('summary.expense_debit', 457)
+                ->where('summary.month_balance', -482)
+                ->where('balanceMeta.needs_initial', true)
+                ->where('summary.balance', null)
             );
     }
 

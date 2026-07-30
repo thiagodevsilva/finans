@@ -59,8 +59,9 @@ class OnboardingTest extends TestCase
         ]);
 
         $this->actingAs($user)
+            ->from(route('dashboard'))
             ->delete(route('onboarding.destroy'))
-            ->assertRedirect(route('dashboard', ['tour' => 'first-setup']));
+            ->assertRedirect(route('dashboard'));
 
         $this->assertNull($user->fresh()->onboarding_status);
     }
@@ -72,8 +73,9 @@ class OnboardingTest extends TestCase
         ]);
 
         $this->actingAs($user)
+            ->from(route('profile.edit'))
             ->delete(route('onboarding.destroy'))
-            ->assertRedirect(route('dashboard', ['tour' => 'first-setup']));
+            ->assertRedirect(route('profile.edit'));
 
         $this->assertNull($user->fresh()->onboarding_status);
     }

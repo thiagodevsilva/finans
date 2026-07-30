@@ -16,10 +16,7 @@ class CreditCardPaymentRequest extends FormRequest
     public function rules(): array
     {
         $accountId = $this->user()->account_id;
-        $needsBank = in_array($this->input('payment_method'), [
-            Transaction::PAYMENT_PIX,
-            Transaction::PAYMENT_TRANSFER,
-        ], true);
+        $needsBank = in_array($this->input('payment_method'), Transaction::BANK_LINKED_PAYMENT_METHODS, true);
 
         return [
             'payment_method' => [
@@ -40,10 +37,7 @@ class CreditCardPaymentRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $needsBank = in_array($this->input('payment_method'), [
-            Transaction::PAYMENT_PIX,
-            Transaction::PAYMENT_TRANSFER,
-        ], true);
+        $needsBank = in_array($this->input('payment_method'), Transaction::BANK_LINKED_PAYMENT_METHODS, true);
 
         $this->merge([
             'bank_account_id' => $needsBank && $this->filled('bank_account_id')

@@ -62,8 +62,11 @@ class InvestmentFeaturesTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('summary.expense', 100)
                 ->where('summary.investments', 500)
-                ->where('summary.cash_flow', 600)
-                ->where('summary.balance', -100)
+                ->where('summary.month_balance', -600)
+                ->where('summary.expense_debit', 100)
+                ->where('summary.expense_credit', 0)
+                ->where('balanceMeta.needs_initial', true)
+                ->where('summary.balance', null)
             );
     }
 

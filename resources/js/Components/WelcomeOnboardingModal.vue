@@ -26,8 +26,9 @@ defineEmits(['accept', 'skip']);
                     Bem-vindo ao Levita
                 </h2>
                 <p class="mt-3 text-sm leading-relaxed text-horizon-500">
-                    Um passeio rápido pelas telas de contas e cartões. Você não precisa cadastrar nada agora —
-                    pode só conhecer o fluxo e criar depois, no seu tempo.
+                    Seja bem-vindo ao Levita, um app simples pra você que quer ter controle total!
+                    Aqui contas e cartões são representações. Não integramos com o banco. Você nos passa a realidade.
+                    Vamos conhecer as telas. Cadastrar é opcional.
                 </p>
                 <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                     <button

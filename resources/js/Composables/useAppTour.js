@@ -1,7 +1,8 @@
 import { router } from '@inertiajs/vue3';
-import { offset } from '@floating-ui/dom';
+import { offset, flip, shift, limitShift } from '@floating-ui/dom';
 import Shepherd from 'shepherd.js';
 import { useTourDemo } from '@/Composables/useTourDemo';
+import { DASHBOARD_TOUR_ID } from '@/tours/dashboard';
 import { FIRST_SETUP_TOUR_ID } from '@/tours/firstSetup';
 import { getTour } from '@/tours/registry';
 
@@ -15,6 +16,11 @@ const { startDemo, setFormType, setPaymentSelection, clearDemo } = useTourDemo()
 
 function waitForElement(selector, timeoutMs = 2800) {
     return new Promise((resolve) => {
+        if (!selector) {
+            resolve(null);
+            return;
+        }
+
         const existing = document.querySelector(selector);
         if (existing) {
             resolve(existing);
@@ -30,6 +36,13 @@ function waitForElement(selector, timeoutMs = 2800) {
             }
         }, 50);
     });
+}
+
+function setSidebarOpen(open) {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    window.dispatchEvent(new CustomEvent('levita:tour-sidebar', { detail: { open: Boolean(open) } }));
 }
 
 function clearTourStorage() {
@@ -62,7 +75,6 @@ function stripTourQuery() {
     router.visit(next, { replace: true, preserveState: true, preserveScroll: true });
 }
 
-
 function persistOnboardingStatus(status) {
     router.post(route('onboarding.store'), { status }, {
         preserveScroll: true,
@@ -85,6 +97,8 @@ function destroyActiveTour() {
     } catch {
         // already torn down
     }
+
+    setSidebarOpen(false);
 }
 
 function buildButtons(tour, stepIndex, steps, tourId) {
@@ -141,10 +155,18 @@ function buildButtons(tour, stepIndex, steps, tourId) {
     return buttons;
 }
 
+function prepareStepUi(step) {
+    if (step.openSidebar || step.attachTo?.element?.includes('nav-')) {
+        setSidebarOpen(true);
+    } else {
+        setSidebarOpen(false);
+    }
+}
+
 function runTourFromStep(tourConfig, stepId) {
     const steps = tourConfig.steps;
     const startIndex = Math.max(0, steps.findIndex((s) => s.id === stepId));
-    const startStep = steps[startIndex];
+    const startStep = steps[startIndex] || steps[0];
 
     if (!route().current(startStep.route)) {
         setTourProgress(tourConfig.id, startStep.id);
@@ -167,7 +189,11 @@ function runTourFromStep(tourConfig, stepId) {
             modalOverlayOpeningPadding: 14,
             modalOverlayOpeningRadius: 14,
             floatingUIOptions: {
-                middleware: [offset(18)],
+                middleware: [
+                    offset(14),
+                    flip({ fallbackPlacements: ['bottom', 'top', 'left', 'right'] }),
+                    shift({ padding: 12, limiter: limitShift() }),
+                ],
             },
         },
     });
@@ -179,32 +205,43 @@ function runTourFromStep(tourConfig, stepId) {
             return;
         }
 
-        tour.addStep({
+        const stepOptions = {
             id: step.id,
             title: step.title,
             text: step.text,
-            attachTo: step.attachTo,
             buttons: buildButtons(tour, index, steps, tourConfig.id),
             beforeShowPromise() {
                 setTourProgress(tourConfig.id, step.id);
+                prepareStepUi(step);
                 if (typeof step.onShow === 'function') {
                     step.onShow(demoApi);
                 }
                 return new Promise((resolve) => {
                     window.setTimeout(() => {
-                        waitForElement(step.attachTo.element).then(() => resolve());
-                    }, 120);
+                        if (step.attachTo?.element) {
+                            waitForElement(step.attachTo.element).then(() => resolve());
+                        } else {
+                            resolve();
+                        }
+                    }, step.openSidebar || step.attachTo?.element?.includes('nav-') ? 220 : 120);
                 });
             },
             when: {
                 show() {
                     setTourProgress(tourConfig.id, step.id);
+                    prepareStepUi(step);
                     if (typeof step.onShow === 'function') {
                         step.onShow(demoApi);
                     }
                 },
             },
-        });
+        };
+
+        if (step.attachTo) {
+            stepOptions.attachTo = step.attachTo;
+        }
+
+        tour.addStep(stepOptions);
     });
 
     let finishedCleanly = false;
@@ -214,11 +251,19 @@ function runTourFromStep(tourConfig, stepId) {
         clearTourStorage();
         activeTour = null;
         clearDemo();
+        setSidebarOpen(false);
 
         if (tourConfig.persistOnboarding) {
             router.post(route('onboarding.store'), { status: 'completed' }, {
                 preserveScroll: true,
-                onSuccess: () => router.visit(route('dashboard')),
+                onSuccess: () => {
+                    const dash = getTour(DASHBOARD_TOUR_ID);
+                    const first = dash?.steps?.[0];
+                    if (first) {
+                        setTourProgress(DASHBOARD_TOUR_ID, first.id);
+                    }
+                    router.visit(route('dashboard', { tour: DASHBOARD_TOUR_ID }));
+                },
             });
             return;
         }
@@ -233,6 +278,7 @@ function runTourFromStep(tourConfig, stepId) {
         clearTourStorage();
         activeTour = null;
         clearDemo();
+        setSidebarOpen(false);
 
         if (tourConfig.persistOnboarding) {
             persistOnboardingStatus('skipped');
@@ -275,8 +321,15 @@ export function useAppTour() {
         runTourFromStep(config, first.id);
     }
 
-    function startFirstSetup() {
-        startTour(FIRST_SETUP_TOUR_ID);
+    function startFirstSetup(fromStepId = null) {
+        const config = getTour(FIRST_SETUP_TOUR_ID);
+        if (!config?.steps?.length) {
+            return;
+        }
+
+        const stepId = fromStepId || config.steps[0].id;
+        setTourProgress(FIRST_SETUP_TOUR_ID, stepId);
+        runTourFromStep(config, stepId);
     }
 
     function resumeIfActive() {
@@ -307,13 +360,32 @@ export function useAppTour() {
         clearTourStorage();
         destroyActiveTour();
         clearDemo();
-        router.delete(route('onboarding.destroy'));
+
+        const onDashboard = route().current('dashboard');
+        const first = getTour(FIRST_SETUP_TOUR_ID)?.steps?.[0];
+        if (first) {
+            setTourProgress(FIRST_SETUP_TOUR_ID, first.id);
+        }
+
+        // No Dashboard: inicia na hora. Em outra tela: após reset, o start navega.
+        if (onDashboard) {
+            startFirstSetup();
+        }
+
+        router.delete(route('onboarding.destroy'), {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                if (!onDashboard) {
+                    startFirstSetup();
+                }
+            },
+        });
     }
 
     /** Inicia o tour da tela atual (ou um id explícito). */
     function startPageTour(tourId = null) {
         const id = tourId || sessionStorage.getItem(STORAGE_ACTIVE);
-        // caller should pass resolved id from registry
         if (tourId) {
             startTour(tourId);
         }

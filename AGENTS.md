@@ -23,16 +23,17 @@
 | PaymentCard | Cartão (`payment_cards`) — crédito tem `closing_day`/`due_day` |
 | CreditCardInvoice | Fatura do cartão de crédito (`credit_card_invoices`) |
 | BankAccount | Conta bancária opcional (`bank_accounts`) — entradas e pagamento de fatura |
+| BalanceAnchor | Âncora de saldo de caixa (`balance_anchors`) — owner informa; saldo recalcula |
 | InstallmentPlan | Compra parcelada (`installment_plans`) — gera N expenses |
 | RecurringBill | Conta fixa (`recurring_bills`) — gera lançamentos `planned` |
-| Transaction | `income`, `expense` ou `transfer` (pagamento de fatura, sem categoria) |
+| Transaction | `income`, `expense`, `transfer` (fatura) ou `investment` |
 
 ## Estrutura
 
 ```
-app/Models/          Account, User, Category, BankAccount, PaymentCard, CreditCardInvoice,
+app/Models/          Account, User, Category, BankAccount, BalanceAnchor, PaymentCard, CreditCardInvoice,
                      InstallmentPlan, RecurringBill, Transaction
-app/Services/        CreditCardInvoiceService, CreditCardPaymentService,
+app/Services/        BalanceService, CreditCardInvoiceService, CreditCardPaymentService,
                      InstallmentPlanService, RecurringBillService
 app/Policies/        RBAC
 app/Http/Controllers/
@@ -48,14 +49,14 @@ database/migrations/
 
 1. **Todo dado de negócio é isolado por `account_id`.** Nunca retornar registros de outra conta.
 2. Preferir trait/scope `BelongsToAccount` + Policies em vez de filtros ad hoc.
-3. Owner gerencia categorias e membros; dependent edita/exclui só as próprias transações, cartões, contas, parcelas e contas fixas.
+3. Owner gerencia categorias, membros e **saldo de caixa** (âncoras); dependent edita/exclui só as próprias transações, cartões, contas, parcelas e contas fixas.
 4. UI em português; valores formatados em BRL.
 5. Identidade visual: amarelo `#ffc107` primário; azul `#2563eb` só em CTAs.
-6. Entradas usam conta bancária opcional; saídas usam forma de pagamento (e cartão quando aplicável).
+6. Entradas usam conta bancária opcional; saídas usam forma de pagamento (e cartão quando aplicável). Débito / débito automático saem do caixa.
 7. **Despesa = compra.** Pagamento de fatura é `type=transfer` e **não** entra em totais de gasto.
-8. Relatórios/dashboard somam só `status=confirmed` e `type` income/expense (nunca transfer).
+8. Relatórios/dashboard somam só `status=confirmed` e `type` income/expense (nunca transfer). **Saldo** do dashboard = caixa com âncora; **saldo do mês** = income − expense − investment. Gastos no crédito vs débito separam onde se comprou.
 9. Parcelas: UI do mês mostra só a parcela do período; detalhe da compra no plano.
-10. Contas fixas: `planned` até confirmar; só confirmadas contam como gasto.
+10. Contas fixas: `planned` até confirmar; só confirmadas contam como gasto. No dashboard, % das contas fixas é por **valor**.
 11. **Testes nunca usam o MySQL do app.** A suite força `sqlite :memory:` (`phpunit.xml` + `CreatesApplication`). Requer extensão `pdo_sqlite` (`php8.1-sqlite3`).
 
 ## Skills do projeto

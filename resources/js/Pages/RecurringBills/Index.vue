@@ -28,7 +28,7 @@ const form = useForm({
     description: '',
     category_id: '',
     estimated_amount: '',
-    day_of_month: 10,
+    day_of_month: '10',
     payment_selection: 'pix',
     payment_method: 'pix',
     payment_card_id: null,
@@ -62,7 +62,7 @@ const resetForm = () => {
     editing.value = null;
     showForm.value = false;
     form.reset();
-    form.day_of_month = 10;
+    form.day_of_month = '10';
     form.payment_selection = 'pix';
     form.payment_method = 'pix';
     form.start_date = new Date().toISOString().slice(0, 10);
@@ -73,7 +73,7 @@ const resetForm = () => {
 const openCreateForm = () => {
     editing.value = null;
     form.reset();
-    form.day_of_month = 10;
+    form.day_of_month = '10';
     form.payment_selection = 'pix';
     form.payment_method = 'pix';
     form.start_date = new Date().toISOString().slice(0, 10);
@@ -89,7 +89,7 @@ const startEdit = (bill) => {
     form.description = bill.description;
     form.category_id = bill.category_id;
     form.estimated_amount = bill.estimated_amount;
-    form.day_of_month = bill.day_of_month;
+    form.day_of_month = String(bill.day_of_month);
     form.payment_selection = bill.payment_method === 'card' && bill.payment_card_id
         ? `card:${bill.payment_card_id}`
         : (bill.payment_method || 'pix');

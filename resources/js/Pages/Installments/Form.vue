@@ -18,7 +18,7 @@ const form = useForm({
     category_id: '',
     payment_card_id: '',
     total_amount: '',
-    installments_count: 2,
+    installments_count: '2',
     purchase_date: new Date().toISOString().slice(0, 10),
     first_installment_date: new Date().toISOString().slice(0, 10),
 });

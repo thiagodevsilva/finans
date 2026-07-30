@@ -34,7 +34,7 @@ const start = () => {
         v-if="canShow"
         type="button"
         :class="compact
-            ? 'rounded-xl bg-white px-3 py-2 text-sm font-semibold text-navy-700 shadow-soft'
+            ? 'rounded-xl bg-white px-3.5 py-2.5 text-[0.9625rem] font-semibold text-navy-700 shadow-soft'
             : 'inline-flex items-center gap-1.5 rounded-xl border border-horizon-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-700 shadow-sm hover:bg-horizon-50 sm:text-sm'"
         @click="start"
     >

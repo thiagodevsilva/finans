@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CreditCardInvoice;
 use App\Models\PaymentCard;
 use App\Models\Transaction;
+use App\Services\BalanceService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -12,7 +12,7 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request): Response
+    public function __invoke(Request $request, BalanceService $balances): Response
     {
         $month = (int) $request->input('month', now()->month);
         $year = (int) $request->input('year', now()->year);
@@ -20,17 +20,20 @@ class DashboardController extends Controller
         $start = Carbon::create($year, $month, 1)->startOfMonth();
         $end = (clone $start)->endOfMonth();
         $range = [$start->toDateString(), $end->toDateString()];
-        $today = now()->toDateString();
+
+        $isCurrentMonth = $start->isSameMonth(now());
+        $balanceAt = $isCurrentMonth ? now() : $end->copy();
+        $cashBalance = $balances->balanceAt($balanceAt);
+        $latestAnchor = $balances->latestAnchor($balanceAt);
 
         $confirmedInMonth = fn () => Transaction::query()
             ->whereBetween('date', $range)
             ->where('status', Transaction::STATUS_CONFIRMED);
 
-        $income = (clone $confirmedInMonth())
+        $income = (float) (clone $confirmedInMonth())
             ->where('type', Transaction::TYPE_INCOME)
             ->sum('amount');
 
-        // Competência: gastos de consumo (exclui fatura e investimentos).
         $expense = (float) (clone $confirmedInMonth())
             ->where('type', Transaction::TYPE_EXPENSE)
             ->sum('amount');
@@ -39,28 +42,13 @@ class DashboardController extends Controller
             ->where('type', Transaction::TYPE_INVESTMENT)
             ->sum('amount');
 
-        // Caixa: saiu da conta (PIX/dinheiro/débito) + fatura + aportes.
-        $cashExpense = (clone $confirmedInMonth())
+        $expenseCredit = (float) (clone $confirmedInMonth())
             ->where('type', Transaction::TYPE_EXPENSE)
-            ->where(function ($q) {
-                $q->whereNull('payment_method')
-                    ->orWhere('payment_method', '!=', Transaction::PAYMENT_CARD)
-                    ->orWhereHas('paymentCard', fn ($card) => $card->where('type', PaymentCard::TYPE_DEBIT));
-            })
+            ->where('payment_method', Transaction::PAYMENT_CARD)
+            ->whereHas('paymentCard', fn ($q) => $q->where('type', PaymentCard::TYPE_CREDIT))
             ->sum('amount');
 
-        $invoicePayments = (clone $confirmedInMonth())
-            ->where('type', Transaction::TYPE_TRANSFER)
-            ->whereNotNull('credit_card_invoice_id')
-            ->where(function ($q) {
-                $q->whereNull('payment_method')
-                    ->orWhere('payment_method', '!=', Transaction::PAYMENT_CARD);
-            })
-            ->sum('amount');
-
-        $cashFlow = (float) $cashExpense + (float) $invoicePayments + $investments;
-
-        $invoiceSummary = $this->invoiceSummary($today);
+        $expenseDebit = round($expense - $expenseCredit, 2);
 
         $recent = Transaction::query()
             ->with([
@@ -81,10 +69,10 @@ class DashboardController extends Controller
             ->whereBetween('date', $range)
             ->whereIn('status', [Transaction::STATUS_PLANNED, Transaction::STATUS_CONFIRMED]);
 
-        $paidAmount = (clone $recurringBase)
+        $paidAmount = (float) (clone $recurringBase)
             ->where('status', Transaction::STATUS_CONFIRMED)
             ->sum('amount');
-        $pendingAmount = (clone $recurringBase)
+        $pendingAmount = (float) (clone $recurringBase)
             ->where('status', Transaction::STATUS_PLANNED)
             ->sum('amount');
         $paidCount = (clone $recurringBase)
@@ -94,20 +82,35 @@ class DashboardController extends Controller
             ->where('status', Transaction::STATUS_PLANNED)
             ->count();
         $totalCount = $paidCount + $pendingCount;
-        $paidPercent = $totalCount > 0 ? round(($paidCount / $totalCount) * 100) : 0;
+        $totalAmount = $paidAmount + $pendingAmount;
+        $paidPercent = $totalAmount > 0 ? (int) round(($paidAmount / $totalAmount) * 100) : 0;
+
+        $previousMonthEnd = now()->copy()->startOfMonth()->subDay()->endOfDay();
+        $previousMonthBalance = $balances->needsInitialAnchor()
+            ? null
+            : $balances->balanceAt($previousMonthEnd);
 
         return Inertia::render('Dashboard', [
             'summary' => [
-                'income' => (float) $income,
+                'balance' => $cashBalance,
+                'month_balance' => round($income - $expense - $investments, 2),
+                'income' => $income,
                 'expense' => $expense,
+                'expense_credit' => $expenseCredit,
+                'expense_debit' => $expenseDebit,
                 'investments' => $investments,
-                'cash_flow' => $cashFlow,
-                'balance' => (float) $income - $expense,
             ],
-            'invoiceSummary' => $invoiceSummary,
+            'balanceMeta' => [
+                'has_anchor' => ! $balances->needsInitialAnchor(),
+                'needs_initial' => $balances->needsInitialAnchor(),
+                'needs_monthly_checkin' => $balances->needsMonthlyCheckin(),
+                'as_of_date' => $latestAnchor?->as_of_date?->toDateString(),
+                'previous_month_balance' => $previousMonthBalance,
+            ],
             'recurringSummary' => [
-                'paid_amount' => (float) $paidAmount,
-                'pending_amount' => (float) $pendingAmount,
+                'paid_amount' => $paidAmount,
+                'pending_amount' => $pendingAmount,
+                'total_amount' => $totalAmount,
                 'paid_count' => $paidCount,
                 'pending_count' => $pendingCount,
                 'total_count' => $totalCount,
@@ -119,33 +122,5 @@ class DashboardController extends Controller
             ],
             'recentTransactions' => $recent,
         ]);
-    }
-
-    /**
-     * @return array{current: float, future: float}
-     */
-    private function invoiceSummary(string $today): array
-    {
-        $currentInvoices = CreditCardInvoice::query()
-            ->whereIn('status', [
-                CreditCardInvoice::STATUS_OPEN,
-                CreditCardInvoice::STATUS_CLOSED,
-                CreditCardInvoice::STATUS_PARTIAL,
-            ])
-            ->whereDate('closing_date', '<=', $today)
-            ->get();
-
-        $current = $currentInvoices->sum(fn (CreditCardInvoice $invoice) => $invoice->remainingAmount());
-
-        $future = (float) Transaction::query()
-            ->where('type', Transaction::TYPE_EXPENSE)
-            ->where('status', Transaction::STATUS_CONFIRMED)
-            ->whereHas('creditCardInvoice', fn ($q) => $q->whereDate('closing_date', '>', $today))
-            ->sum('amount');
-
-        return [
-            'current' => round((float) $current, 2),
-            'future' => round($future, 2),
-        ];
     }
 }

@@ -39,8 +39,8 @@ const form = useForm({
     last_four: '',
     color: '#ffc107',
     bank_account_id: '',
-    closing_day: 10,
-    due_day: 17,
+    closing_day: '10',
+    due_day: '17',
 });
 
 watch(
@@ -50,8 +50,8 @@ watch(
             form.closing_day = null;
             form.due_day = null;
         } else if (!form.closing_day) {
-            form.closing_day = 10;
-            form.due_day = 17;
+            form.closing_day = '10';
+            form.due_day = '17';
         }
     },
 );
@@ -62,8 +62,8 @@ const resetFormDefaults = () => {
     form.type = 'credit';
     form.color = '#ffc107';
     form.bank_account_id = '';
-    form.closing_day = 10;
-    form.due_day = 17;
+    form.closing_day = '10';
+    form.due_day = '17';
     form.clearErrors();
 };
 
@@ -88,8 +88,8 @@ const startEdit = (card) => {
     form.last_four = card.last_four || '';
     form.color = card.color;
     form.bank_account_id = card.bank_account_id || '';
-    form.closing_day = card.closing_day || 10;
-    form.due_day = card.due_day || 17;
+    form.closing_day = String(card.closing_day || 10);
+    form.due_day = String(card.due_day || 17);
     form.clearErrors();
     showForm.value = true;
     focusForm();

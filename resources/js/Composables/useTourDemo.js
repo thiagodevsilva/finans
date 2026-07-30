@@ -18,21 +18,27 @@ export const demoDashboardData = {
     summary: {
         income: 5200,
         expense: 3100,
-        balance: 2100,
-        cash_flow: 2800,
+        expense_credit: 1800,
+        expense_debit: 1300,
+        balance: 8420.5,
+        month_balance: 1600,
         investments: 500,
     },
-    invoiceSummary: {
-        current: 890.5,
-        future: 1240,
+    balanceMeta: {
+        has_anchor: true,
+        needs_initial: false,
+        needs_monthly_checkin: false,
+        as_of_date: today(),
+        previous_month_balance: 7900,
     },
     recurringSummary: {
-        paid_amount: 450,
-        pending_amount: 280,
-        paid_count: 2,
+        paid_amount: 1400,
+        pending_amount: 120,
+        total_amount: 1520,
+        paid_count: 1,
         pending_count: 1,
-        total_count: 3,
-        paid_percent: 67,
+        total_count: 2,
+        paid_percent: 92,
     },
     recentTransactions: [
         {
@@ -55,7 +61,7 @@ export const demoDashboardData = {
             user: { name: 'Você' },
             category: { name: 'Alimentação', color: '#f59e0b' },
             payment_method: 'card',
-            payment_card: { name: 'Nubank', last_four: '1234' },
+            payment_card: { name: 'Nubank', last_four: '1234', type: 'credit' },
         },
         {
             id: 'demo-investment',

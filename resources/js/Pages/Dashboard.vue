@@ -1,8 +1,9 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import BalanceCheckinModal from '@/Components/BalanceCheckinModal.vue';
 import Card from '@/Components/Card.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
-import StatWidget from '@/Components/StatWidget.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
 import TourDemoBanner from '@/Components/TourDemoBanner.vue';
 import TransactionList from '@/Components/TransactionList.vue';
 import WelcomeOnboardingModal from '@/Components/WelcomeOnboardingModal.vue';
@@ -12,15 +13,18 @@ import { DASHBOARD_TOUR_ID } from '@/tours/dashboard';
 import { FIRST_SETUP_TOUR_ID } from '@/tours/firstSetup';
 import { formatBRL, MONTHS } from '@/utils/format';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
     summary: Object,
-    invoiceSummary: {
+    balanceMeta: {
         type: Object,
         default: () => ({
-            current: 0,
-            future: 0,
+            has_anchor: false,
+            needs_initial: false,
+            needs_monthly_checkin: false,
+            as_of_date: null,
+            previous_month_balance: null,
         }),
     },
     recurringSummary: {
@@ -28,6 +32,7 @@ const props = defineProps({
         default: () => ({
             paid_amount: 0,
             pending_amount: 0,
+            total_amount: 0,
             paid_count: 0,
             pending_count: 0,
             total_count: 0,
@@ -39,18 +44,19 @@ const props = defineProps({
 });
 
 const page = usePage();
-const mode = ref('money');
 const showWelcome = ref(false);
+const balanceModalMode = ref(null); // initial | monthly | update | null
 const { startFirstSetup, startTour, resumeIfActive, skipOnboarding, isTourActive } = useAppTour();
 const { isDemoTour, demoDashboardData } = useTourDemo();
 
 const showingDemo = computed(() => isDemoTour(DASHBOARD_TOUR_ID));
+const isOwner = computed(() => page.props.auth.user?.is_owner === true);
 
 const summary = computed(() =>
     showingDemo.value ? demoDashboardData.summary : props.summary,
 );
-const invoiceSummary = computed(() =>
-    showingDemo.value ? demoDashboardData.invoiceSummary : props.invoiceSummary,
+const balanceMeta = computed(() =>
+    showingDemo.value ? demoDashboardData.balanceMeta : props.balanceMeta,
 );
 const recurringSummary = computed(() =>
     showingDemo.value ? demoDashboardData.recurringSummary : props.recurringSummary,
@@ -68,14 +74,50 @@ const hasRecurring = computed(() =>
     showingDemo.value || recurringSummary.value.total_count > 0,
 );
 
-const hasInvoices = computed(() =>
-    showingDemo.value
-    || invoiceSummary.value.current > 0
-    || invoiceSummary.value.future > 0,
-);
+const balanceDisplay = computed(() => {
+    if (summary.value.balance == null) return '—';
+    return formatBRL(summary.value.balance);
+});
 
-const showInvestments = computed(() =>
-    showingDemo.value || summary.value.investments > 0,
+const balanceToneClass = computed(() => {
+    if (summary.value.balance == null) return 'text-navy-700';
+    return summary.value.balance >= 0 ? 'text-emerald-600' : 'text-red-600';
+});
+
+const showBalanceModal = computed(() => balanceModalMode.value != null);
+
+const openUpdateBalance = () => {
+    balanceModalMode.value = 'update';
+};
+
+const closeBalanceModal = () => {
+    if (balanceModalMode.value === 'update') {
+        balanceModalMode.value = null;
+    }
+};
+
+const syncBalanceModals = () => {
+    if (!isOwner.value || showingDemo.value || showWelcome.value) return;
+
+    if (balanceMeta.value.needs_initial) {
+        balanceModalMode.value = 'initial';
+        return;
+    }
+
+    if (balanceMeta.value.needs_monthly_checkin) {
+        balanceModalMode.value = 'monthly';
+        return;
+    }
+
+    if (balanceModalMode.value === 'initial' || balanceModalMode.value === 'monthly') {
+        balanceModalMode.value = null;
+    }
+};
+
+watch(
+    () => [balanceMeta.value.needs_initial, balanceMeta.value.needs_monthly_checkin, showWelcome.value],
+    () => syncBalanceModals(),
+    { immediate: true },
 );
 
 const applyFilters = (event) => {
@@ -88,7 +130,8 @@ const applyFilters = (event) => {
 
 const acceptWelcome = () => {
     showWelcome.value = false;
-    startFirstSetup();
+    // Modal já apresentou o Levita; o tour segue pelas contas.
+    startFirstSetup('dash-nav-contas');
 };
 
 const skipWelcome = () => {
@@ -150,92 +193,60 @@ onMounted(() => {
             </div>
         </div>
 
-        <div data-tour="dash-stats">
-            <div class="mb-4 rounded-[16px] bg-white px-4 py-3 shadow-soft sm:hidden">
-                <div class="flex items-center justify-between gap-3 border-b border-horizon-100 pb-2.5">
-                    <span class="text-sm font-medium text-horizon-500">Saldo</span>
-                    <span
-                        class="text-base font-bold tabular-nums"
-                        :class="summary.balance >= 0 ? 'text-emerald-600' : 'text-red-600'"
-                    >
-                        {{ formatBRL(summary.balance) }}
-                    </span>
-                </div>
-                <div class="mt-2.5 grid grid-cols-2 gap-3">
-                    <div>
-                        <p class="text-xs font-medium text-horizon-500">Entradas</p>
-                        <p class="text-sm font-bold tabular-nums text-emerald-600">{{ formatBRL(summary.income) }}</p>
+        <div data-tour="dash-stats" class="mb-4 sm:mb-6">
+            <div class="rounded-[16px] bg-white px-4 py-4 shadow-soft sm:px-6 sm:py-5">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <p class="text-sm font-medium text-horizon-500">Saldo</p>
+                        <p
+                            class="mt-1 text-3xl font-bold tabular-nums tracking-tight sm:text-4xl"
+                            :class="balanceToneClass"
+                            data-tour="dash-balance"
+                        >
+                            {{ balanceDisplay }}
+                        </p>
+                        <p class="mt-2 text-sm text-horizon-500">
+                            Saldo do mês
+                            <span
+                                class="ml-1 font-semibold tabular-nums"
+                                :class="summary.month_balance >= 0 ? 'text-emerald-600' : 'text-red-600'"
+                            >
+                                {{ formatBRL(summary.month_balance) }}
+                            </span>
+                        </p>
                     </div>
-                    <div class="text-right">
-                        <p class="text-xs font-medium text-horizon-500">Saídas</p>
-                        <p class="text-sm font-bold tabular-nums text-red-600">{{ formatBRL(summary.expense) }}</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="mb-4 hidden gap-4 sm:mb-6 sm:grid sm:grid-cols-3">
-                <StatWidget
-                    title="Saldo do mês"
-                    :value="formatBRL(summary.balance)"
-                    :tone="summary.balance >= 0 ? 'positive' : 'negative'"
-                />
-                <StatWidget title="Entradas" :value="formatBRL(summary.income)" tone="positive" />
-                <StatWidget title="Saídas" :value="formatBRL(summary.expense)" tone="negative" />
-            </div>
-        </div>
-
-        <div data-tour="dash-cash">
-            <p class="mb-4 border-t border-horizon-100 pt-2 text-xs font-medium text-horizon-600 sm:hidden">
-                Fluxo de caixa
-                <span class="float-right font-semibold tabular-nums text-navy-700">{{ formatBRL(summary.cash_flow) }}</span>
-            </p>
-            <div
-                class="mb-4 hidden rounded-[16px] bg-white px-4 py-2.5 shadow-soft sm:flex sm:items-center sm:justify-between"
-            >
-                <div>
-                    <p class="text-sm font-medium text-horizon-600">Fluxo de caixa</p>
-                    <p class="text-xs text-horizon-500">Dinheiro que saiu da conta neste mês</p>
-                </div>
-                <p class="text-sm font-bold tabular-nums text-navy-700">{{ formatBRL(summary.cash_flow) }}</p>
-            </div>
-        </div>
-
-        <div v-if="showInvestments" data-tour="dash-invest">
-            <p class="mb-4 text-xs font-medium text-teal-700 sm:hidden">
-                Investimentos
-                <span class="float-right font-semibold tabular-nums">{{ formatBRL(summary.investments) }}</span>
-            </p>
-            <div
-                class="mb-4 hidden rounded-[16px] bg-teal-50 px-4 py-2.5 shadow-soft ring-1 ring-teal-100 sm:flex sm:items-center sm:justify-between"
-            >
-                <div>
-                    <p class="text-sm font-medium text-teal-800">Investimentos</p>
-                    <p class="text-xs text-teal-700/80">Aportes do mês (não entram nas Saídas de consumo)</p>
-                </div>
-                <p class="text-sm font-bold tabular-nums text-teal-900">{{ formatBRL(summary.investments) }}</p>
-            </div>
-        </div>
-
-        <div
-            v-if="hasInvoices"
-            class="mb-4 rounded-[16px] bg-white px-4 py-3 shadow-soft"
-            data-tour="dash-invoices"
-        >
-            <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0 flex-1 space-y-1.5">
-                    <p class="text-xs font-medium text-horizon-600 sm:text-sm">Faturas do cartão</p>
-                    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
-                        <span class="text-horizon-600">Fatura atual (a pagar)</span>
-                        <span class="font-bold tabular-nums text-navy-700">{{ formatBRL(invoiceSummary.current) }}</span>
-                    </div>
-                    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
-                        <span class="text-horizon-600">Faturas futuras</span>
-                        <span class="font-bold tabular-nums text-navy-700">{{ formatBRL(invoiceSummary.future) }}</span>
+                    <div class="flex shrink-0 flex-col items-end gap-2 text-right">
+                        <SecondaryButton
+                            v-if="isOwner && !showingDemo"
+                            class="!px-3 !py-1.5 text-xs sm:text-sm"
+                            type="button"
+                            data-tour="dash-balance-update"
+                            @click="openUpdateBalance"
+                        >
+                            Atualizar saldo
+                        </SecondaryButton>
+                        <div class="space-y-1">
+                            <p class="text-sm text-horizon-500">
+                                Entradas
+                                <span class="ml-1 font-semibold tabular-nums text-emerald-600">
+                                    {{ formatBRL(summary.income) }}
+                                </span>
+                            </p>
+                            <p class="text-sm text-horizon-500">
+                                Gastos no crédito
+                                <span class="ml-1 font-semibold tabular-nums text-red-600">
+                                    {{ formatBRL(summary.expense_credit) }}
+                                </span>
+                            </p>
+                            <p class="text-sm text-horizon-500">
+                                Gastos no débito
+                                <span class="ml-1 font-semibold tabular-nums text-red-600">
+                                    {{ formatBRL(summary.expense_debit) }}
+                                </span>
+                            </p>
+                        </div>
                     </div>
                 </div>
-                <Link :href="route('payment-cards.index')" class="shrink-0 text-xs font-medium text-cta hover:underline sm:text-sm">
-                    Ver
-                </Link>
             </div>
         </div>
 
@@ -244,45 +255,24 @@ onMounted(() => {
             class="mb-4 rounded-[16px] bg-white px-4 py-3 shadow-soft"
             data-tour="dash-recurring"
         >
-            <div class="flex items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="min-w-0">
                     <p class="text-xs font-medium text-horizon-600 sm:text-sm">Contas fixas</p>
-                    <p v-if="mode === 'money'" class="mt-0.5 text-sm font-bold tabular-nums text-navy-700">
-                        pago {{ formatBRL(recurringSummary.paid_amount) }}
-                        <span class="font-medium text-horizon-600">· falta {{ formatBRL(recurringSummary.pending_amount) }}</span>
-                    </p>
-                    <p v-else class="mt-0.5 text-sm font-bold tabular-nums text-navy-700">
+                    <p class="mt-0.5 text-sm font-bold tabular-nums text-navy-700">
                         {{ recurringSummary.paid_percent }}% pagas
                         <span class="font-medium text-horizon-600">
-                            ({{ recurringSummary.paid_count }}/{{ recurringSummary.total_count }})
+                            ({{ formatBRL(recurringSummary.paid_amount) }} / {{ formatBRL(recurringSummary.total_amount) }})
                         </span>
                     </p>
                 </div>
-                <div class="flex shrink-0 items-center gap-2">
-                    <div class="segmented">
-                        <button
-                            type="button"
-                            class="segmented-option !px-2.5 !py-1"
-                            :class="mode === 'money' ? 'segmented-option-active' : 'segmented-option-idle'"
-                            @click="mode = 'money'"
-                        >
-                            R$
-                        </button>
-                        <button
-                            type="button"
-                            class="segmented-option !px-2.5 !py-1"
-                            :class="mode === 'percent' ? 'segmented-option-active' : 'segmented-option-idle'"
-                            @click="mode = 'percent'"
-                        >
-                            %
-                        </button>
-                    </div>
-                    <Link :href="route('recurring-bills.index')" class="text-xs font-medium text-cta hover:underline sm:text-sm">
-                        Ver
-                    </Link>
-                </div>
+                <Link
+                    :href="route('recurring-bills.index')"
+                    class="inline-flex shrink-0 items-center rounded-xl border border-cta/30 bg-cta/5 px-3 py-1.5 text-xs font-semibold text-cta hover:bg-cta/10 sm:text-sm"
+                >
+                    Ver contas fixas
+                </Link>
             </div>
-            <div v-if="mode === 'percent'" class="progress-track mt-2">
+            <div class="progress-track mt-2">
                 <div
                     class="progress-fill"
                     :style="{ width: `${recurringSummary.paid_percent}%` }"
@@ -302,6 +292,13 @@ onMounted(() => {
             :show="showWelcome"
             @accept="acceptWelcome"
             @skip="skipWelcome"
+        />
+
+        <BalanceCheckinModal
+            :show="showBalanceModal"
+            :mode="balanceModalMode || 'initial'"
+            :previous-month-balance="balanceMeta.previous_month_balance"
+            @close="closeBalanceModal"
         />
     </AppLayout>
 </template>

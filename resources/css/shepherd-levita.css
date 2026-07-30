@@ -2,13 +2,15 @@
 
 .shepherd-levita.shepherd-element {
     z-index: 10000;
-    max-width: 360px;
+    max-width: min(360px, calc(100vw - 1.5rem));
+    width: max-content;
     margin: 0;
     border-radius: 16px;
     border: 1px solid #e9edf7;
     font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
     box-shadow: 0 12px 40px rgba(27, 37, 89, 0.18);
     overflow: hidden;
+    box-sizing: border-box;
 }
 
 .shepherd-levita .shepherd-content {
@@ -105,4 +107,18 @@
 
 .shepherd-modal-overlay-container {
     z-index: 9990;
+}
+
+/* Step sem âncora (apresentação): centraliza o card */
+.shepherd-element.shepherd-enabled:not(.shepherd-has-title) {
+    /* noop — mantém compat */
+}
+
+.shepherd-centered,
+.shepherd-element[data-shepherd-step-id='fs-welcome'] {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    margin: 0 !important;
 }

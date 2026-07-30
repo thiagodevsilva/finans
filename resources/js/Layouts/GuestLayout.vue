@@ -25,6 +25,9 @@ import { Link } from '@inertiajs/vue3';
                 src="/images/capa-mulher.png"
                 alt=""
                 class="absolute bottom-0 left-1/2 h-[90%] w-auto max-w-none -translate-x-1/2 object-contain object-bottom select-none"
+                style="aspect-ratio: 1024 / 1536;"
+                width="1024"
+                height="1536"
                 draggable="false"
             />
         </div>

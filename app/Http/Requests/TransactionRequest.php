@@ -25,10 +25,7 @@ class TransactionRequest extends FormRequest
         $isInvestment = $this->input('type') === Transaction::TYPE_INVESTMENT;
         $isCard = $isExpense && $this->input('payment_method') === Transaction::PAYMENT_CARD;
         $isInstallment = $isExpense && $this->boolean('is_installment');
-        $needsBank = in_array($this->input('payment_method'), [
-            Transaction::PAYMENT_PIX,
-            Transaction::PAYMENT_TRANSFER,
-        ], true);
+        $needsBank = in_array($this->input('payment_method'), Transaction::BANK_LINKED_PAYMENT_METHODS, true);
 
         return [
             'type' => [
@@ -165,10 +162,7 @@ class TransactionRequest extends FormRequest
             'is_installment' => $this->boolean('is_installment'),
         ]);
 
-        $needsBank = in_array($this->input('payment_method'), [
-            Transaction::PAYMENT_PIX,
-            Transaction::PAYMENT_TRANSFER,
-        ], true);
+        $needsBank = in_array($this->input('payment_method'), Transaction::BANK_LINKED_PAYMENT_METHODS, true);
 
         if ($this->input('type') === Transaction::TYPE_TRANSFER) {
             $this->merge([

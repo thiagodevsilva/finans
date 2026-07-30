@@ -35,14 +35,14 @@ const { restartOnboarding } = useAppTour();
             </div>
 
             <div class="bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:rounded-lg sm:p-8">
-                <h2 class="text-lg font-medium text-navy-700">Guia do app</h2>
+                <h2 class="text-lg font-medium text-navy-700">Tutorial do app</h2>
                 <p class="mt-1 text-sm text-horizon-500">
                     Em dúvida? Refaça o passeio de contas e cartões, ou use
                     <span class="font-medium text-navy-700">Ajuda nesta tela</span>
-                    no Dashboard e em Transações para guias curtos com exemplos.
+                    no Dashboard e em Transações para tutoriais curtos com exemplos.
                 </p>
                 <PrimaryButton type="button" class="mt-4" @click="restartOnboarding">
-                    Refazer guia
+                    Refazer tutorial
                 </PrimaryButton>
             </div>
 
