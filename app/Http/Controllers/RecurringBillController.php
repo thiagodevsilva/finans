@@ -34,6 +34,7 @@ class RecurringBillController extends Controller
         $bills = RecurringBill::query()
             ->with(['category:id,name,color', 'user:id,name', 'paymentCard:id,name,color', 'bankAccount:id,name,color'])
             ->where('active', true)
+            ->orderBy('day_of_month')
             ->orderBy('description')
             ->get()
             ->map(fn (RecurringBill $bill) => [

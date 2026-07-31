@@ -261,54 +261,63 @@ const skip = (item) => {
             </form>
         </div>
 
-        <section class="mb-8">
-            <h2 class="mb-3 text-lg font-bold text-navy-700">Cadastradas</h2>
+        <section class="mb-6 sm:mb-8">
+            <h2 class="mb-2 text-base font-bold text-navy-700 sm:mb-3 sm:text-lg">Cadastradas</h2>
             <div v-if="!bills.length" class="rounded-[20px] bg-white px-5 py-8 text-center text-sm text-horizon-500 shadow-soft">
                 Nenhuma conta fixa cadastrada.
             </div>
-            <div v-else class="grid gap-3 sm:grid-cols-2">
-                <article v-for="bill in bills" :key="bill.id" class="rounded-[20px] bg-white p-5 shadow-soft">
-                    <div class="flex items-start justify-between gap-2">
-                        <div>
-                            <h3 class="font-bold text-navy-700">{{ bill.description }}</h3>
-                            <p class="text-sm text-horizon-500">
-                                Todo dia {{ bill.day_of_month }} · {{ formatBRL(bill.estimated_amount) }}
-                            </p>
-                            <p class="mt-1 text-xs text-horizon-500">
-                                {{ bill.category?.name }}
-                                <span v-if="!bill.active"> · Inativa</span>
-                            </p>
+            <div v-else class="divide-y divide-horizon-100 overflow-hidden rounded-[16px] bg-white shadow-soft sm:grid sm:grid-cols-2 sm:gap-3 sm:divide-y-0 sm:bg-transparent sm:shadow-none">
+                <article
+                    v-for="bill in bills"
+                    :key="bill.id"
+                    class="flex items-center justify-between gap-3 px-3 py-2.5 sm:rounded-[20px] sm:bg-white sm:p-5 sm:shadow-soft"
+                >
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-baseline gap-2">
+                            <h3 class="truncate text-sm font-semibold text-navy-700 sm:text-base sm:font-bold">{{ bill.description }}</h3>
+                            <span class="shrink-0 text-[11px] text-horizon-500 sm:hidden">dia {{ bill.day_of_month }}</span>
                         </div>
-                        <span class="text-xs text-horizon-500">
+                        <p class="truncate text-xs text-horizon-500 sm:text-sm">
+                            <span class="hidden sm:inline">Todo dia {{ bill.day_of_month }} · </span>{{ formatBRL(bill.estimated_amount) }}
+                            <span class="sm:hidden"> · {{ bill.category?.name }}</span>
+                        </p>
+                        <p class="mt-0.5 hidden text-xs text-horizon-500 sm:block">
+                            {{ bill.category?.name }}
+                            <span v-if="!bill.active"> · Inativa</span>
+                        </p>
+                    </div>
+                    <div class="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end sm:gap-3">
+                        <span class="hidden text-xs text-horizon-500 sm:inline">
                             {{ bill.user_id === userId ? 'Minha' : bill.user?.name }}
                         </span>
-                    </div>
-                    <div v-if="bill.can_edit && bill.active" class="mt-4 flex gap-3 text-sm">
-                        <button type="button" class="font-medium text-cta hover:underline" @click="startEdit(bill)">Editar</button>
-                        <button type="button" class="font-medium text-red-600 hover:underline" @click="destroy(bill)">Excluir</button>
+                        <div v-if="bill.can_edit && bill.active" class="flex gap-2 text-xs sm:gap-3 sm:text-sm">
+                            <button type="button" class="font-medium text-cta hover:underline" @click="startEdit(bill)">Editar</button>
+                            <button type="button" class="font-medium text-red-600 hover:underline" @click="destroy(bill)">Excluir</button>
+                        </div>
                     </div>
                 </article>
             </div>
         </section>
 
         <section>
-            <h2 class="mb-3 text-lg font-bold text-navy-700">A pagar</h2>
+            <h2 class="mb-2 text-base font-bold text-navy-700 sm:mb-3 sm:text-lg">A pagar</h2>
             <div v-if="!upcoming.length" class="rounded-[20px] bg-white px-5 py-8 text-center text-sm text-horizon-500 shadow-soft">
                 Nenhuma conta fixa prevista no horizonte.
             </div>
-            <div v-else class="space-y-3">
+            <div v-else class="divide-y divide-horizon-100 overflow-hidden rounded-[16px] bg-white shadow-soft sm:space-y-3 sm:divide-y-0 sm:bg-transparent sm:shadow-none">
                 <article
                     v-for="item in upcoming"
                     :key="item.id"
-                    class="flex flex-wrap items-center justify-between gap-3 rounded-[16px] bg-white px-4 py-3 shadow-soft"
+                    class="flex items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:rounded-[16px] sm:bg-white sm:px-4 sm:py-3 sm:shadow-soft"
                 >
-                    <div>
-                        <p class="font-semibold text-navy-700">{{ item.description }}</p>
-                        <p class="text-xs text-horizon-500">
-                            {{ formatDate(item.date) }} · {{ item.category?.name }} · Previsto {{ formatBRL(item.amount) }}
+                    <div class="min-w-0 flex-1">
+                        <p class="truncate text-sm font-semibold text-navy-700">{{ item.description }}</p>
+                        <p class="truncate text-[11px] text-horizon-500 sm:text-xs">
+                            {{ formatDate(item.date) }} · {{ formatBRL(item.amount) }}
+                            <span class="hidden sm:inline"> · {{ item.category?.name }}</span>
                         </p>
                     </div>
-                    <div v-if="item.can_edit" class="flex gap-3 text-sm">
+                    <div v-if="item.can_edit" class="flex shrink-0 gap-2 text-xs sm:gap-3 sm:text-sm">
                         <button type="button" class="font-medium text-cta hover:underline" @click="openConfirm(item)">Confirmar</button>
                         <button type="button" class="font-medium text-horizon-600 hover:underline" @click="skip(item)">Pular</button>
                     </div>
