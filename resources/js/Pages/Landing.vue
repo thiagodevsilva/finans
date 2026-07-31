@@ -184,19 +184,20 @@ const jsonLd = computed(() =>
                     <p class="mt-4 inline-flex w-max max-w-full rounded-full bg-cta px-4 py-1.5 text-sm font-semibold text-white md:text-base">
                         Grátis · Simples · Para solteiros, casais e famílias
                     </p>
-                    <div class="mt-8 flex flex-wrap items-center gap-3">
+                    <div class="mt-8 max-w-md">
                         <Link
                             :href="route('register')"
-                            class="rounded-xl border border-white px-6 py-3 text-base font-semibold text-white hover:bg-white/10"
+                            class="flex w-full items-center justify-center gap-2 rounded-full border-2 border-white px-6 py-3.5 text-base font-semibold text-white transition hover:bg-white/10 md:py-4 md:text-lg"
                         >
                             Começar agora (É grátis)
+                            <span aria-hidden="true">→</span>
                         </Link>
-                        <Link
-                            :href="route('login')"
-                            class="rounded-xl border border-white px-6 py-3 text-base font-semibold text-white hover:bg-white/10"
-                        >
-                            Já tenho conta
-                        </Link>
+                        <div class="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm text-white/80">
+                            <span>Leva menos de 1 minuto</span>
+                            <Link :href="route('login')" class="font-medium text-white underline-offset-2 hover:underline">
+                                Já tem conta? Entrar
+                            </Link>
+                        </div>
                     </div>
                 </div>
                 <div class="relative hidden min-h-[320px] md:block">
@@ -316,27 +317,29 @@ const jsonLd = computed(() =>
                         Comece grátis e traga quem divide a casa com você. Em poucos minutos o orçamento da família ganha clareza.
                     </p>
                 </div>
-                <div class="flex flex-wrap gap-3">
+                <div class="w-full max-w-md shrink-0">
                     <Link
                         v-if="user"
                         :href="route('dashboard')"
-                        class="rounded-xl bg-cta px-6 py-3 text-base font-semibold text-white hover:bg-cta-dark"
+                        class="flex w-full items-center justify-center gap-2 rounded-full border-2 border-white px-6 py-3.5 text-base font-semibold text-white transition hover:bg-white/10 md:py-4 md:text-lg"
                     >
                         Ir ao app
+                        <span aria-hidden="true">→</span>
                     </Link>
                     <template v-else>
                         <Link
                             :href="route('register')"
-                            class="rounded-xl border border-white px-6 py-3 text-base font-semibold text-white hover:bg-white/10"
+                            class="flex w-full items-center justify-center gap-2 rounded-full border-2 border-white px-6 py-3.5 text-base font-semibold text-white transition hover:bg-white/10 md:py-4 md:text-lg"
                         >
                             Começar agora (É grátis)
+                            <span aria-hidden="true">→</span>
                         </Link>
-                        <Link
-                            :href="route('login')"
-                            class="rounded-xl border border-white px-6 py-3 text-base font-semibold text-white hover:bg-white/10"
-                        >
-                            Já tenho conta
-                        </Link>
+                        <div class="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm text-white/80">
+                            <span>Leva menos de 1 minuto</span>
+                            <Link :href="route('login')" class="font-medium text-white underline-offset-2 hover:underline">
+                                Já tem conta? Entrar
+                            </Link>
+                        </div>
                     </template>
                 </div>
             </div>
