@@ -8,6 +8,8 @@ const user = computed(() => page.props.auth?.user);
 const year = new Date().getFullYear();
 const appUrl = computed(() => page.props.app?.url || '');
 const appName = computed(() => page.props.app?.name || 'Levita');
+const assetVersion = computed(() => page.props.app?.assetVersion || '1');
+const img = (path) => `${path}?v=${assetVersion.value}`;
 
 const seoTitle = 'App de finanças gratuito e simples para famílias e casais';
 const seoDescription =
@@ -199,7 +201,7 @@ const jsonLd = computed(() =>
                 </div>
                 <div class="relative hidden min-h-[320px] md:block">
                     <img
-                        src="/images/capa-mulher.png"
+                        :src="img('/images/capa-mulher.png')"
                         alt="Levita — app de finanças gratuito para famílias"
                         class="absolute bottom-0 left-1/2 h-[min(100%,520px)] w-auto max-w-none -translate-x-1/2 object-contain object-bottom"
                         style="aspect-ratio: 1024 / 1536;"
@@ -216,7 +218,7 @@ const jsonLd = computed(() =>
             <div class="mx-auto grid max-w-6xl items-center gap-10 px-4 md:grid-cols-2">
                 <div class="overflow-hidden rounded-2.5xl bg-gradient-to-br from-lightPrimary to-brand-50 shadow-soft transition duration-300 hover:shadow-lg">
                     <img
-                        src="/images/saiba.png"
+                        :src="img('/images/saiba.png')"
                         alt="Controle de gastos e categorias no Levita"
                         class="aspect-[4/3] w-full object-cover transition duration-500 hover:scale-[1.02]"
                         loading="lazy"
@@ -243,7 +245,7 @@ const jsonLd = computed(() =>
                 </div>
                 <div class="order-1 overflow-hidden rounded-2.5xl bg-gradient-to-br from-lightPrimary to-brand-50 shadow-soft transition duration-300 hover:shadow-lg md:order-2">
                     <img
-                        src="/images/juros.png"
+                        :src="img('/images/juros.png')"
                         alt="Orçamento familiar compartilhado no Levita"
                         class="aspect-[4/3] w-full object-cover transition duration-500 hover:scale-[1.02]"
                         loading="lazy"
@@ -261,7 +263,7 @@ const jsonLd = computed(() =>
                     <div class="group">
                         <div class="mx-auto overflow-hidden rounded-2.5xl bg-gradient-to-br from-lightPrimary to-brand-50 shadow-soft transition duration-300 group-hover:shadow-lg">
                             <img
-                                src="/images/facil.png"
+                                :src="img('/images/facil.png')"
                                 alt="Interface simples do Levita"
                                 class="aspect-square w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                                 loading="lazy"
@@ -275,7 +277,7 @@ const jsonLd = computed(() =>
                     <div class="group">
                         <div class="mx-auto overflow-hidden rounded-2.5xl bg-gradient-to-br from-lightPrimary to-brand-50 shadow-soft transition duration-300 group-hover:shadow-lg">
                             <img
-                                src="/images/economize.png"
+                                :src="img('/images/economize.png')"
                                 alt="Visão clara do orçamento no Levita"
                                 class="aspect-square w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                                 loading="lazy"
@@ -289,7 +291,7 @@ const jsonLd = computed(() =>
                     <div class="group">
                         <div class="mx-auto overflow-hidden rounded-2.5xl bg-gradient-to-br from-lightPrimary to-brand-50 shadow-soft transition duration-300 group-hover:shadow-lg">
                             <img
-                                src="/images/suporte.png"
+                                :src="img('/images/suporte.png')"
                                 alt="Finanças em família no Levita"
                                 class="aspect-square w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                                 loading="lazy"

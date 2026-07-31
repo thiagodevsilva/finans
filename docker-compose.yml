@@ -18,6 +18,8 @@ services:
     volumes:
       - ./.env:/var/www/html/.env
       - levita_storage:/var/www/html/storage
+      # Mantém chunks Vite antigos entre deploys (HTML/JS em cache nos celulares).
+      - levita_build:/var/www/html/public/build
     depends_on:
       mysql:
         condition: service_healthy
@@ -47,6 +49,7 @@ services:
 volumes:
   levita_mysql:
   levita_storage:
+  levita_build:
 
 networks:
   levita:

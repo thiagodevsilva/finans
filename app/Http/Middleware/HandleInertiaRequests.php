@@ -27,6 +27,7 @@ class HandleInertiaRequests extends Middleware
             'app' => [
                 'name' => config('app.name', 'Levita'),
                 'url' => rtrim(config('app.url'), '/'),
+                'assetVersion' => $this->assetVersion(),
             ],
             'auth' => [
                 'user' => $user ? [
@@ -49,5 +50,31 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
             ],
         ];
+    }
+
+    /**
+     * Muda a cada build Vite ou alteração em /public/images — usado em ?v= das imagens.
+     */
+    private function assetVersion(): string
+    {
+        $parts = [];
+
+        $manifest = public_path('build/manifest.json');
+        if (is_file($manifest)) {
+            $parts[] = (string) filemtime($manifest);
+        }
+
+        $imagesDir = public_path('images');
+        if (is_dir($imagesDir)) {
+            foreach (glob($imagesDir.'/*') ?: [] as $file) {
+                if (is_file($file)) {
+                    $parts[] = basename($file).(string) filemtime($file);
+                }
+            }
+        }
+
+        return $parts === []
+            ? '1'
+            : substr(hash('sha256', implode('|', $parts)), 0, 10);
     }
 }

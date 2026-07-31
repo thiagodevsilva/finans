@@ -73,6 +73,8 @@ WORKDIR /var/www/html
 
 COPY . .
 COPY --from=vendor /app/vendor ./vendor
+# Release atual do Vite — o entrypoint mescla no volume sem apagar hashes antigos.
+COPY --from=frontend /app/public/build /opt/build-release
 COPY --from=frontend /app/public/build ./public/build
 
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
@@ -84,7 +86,9 @@ RUN composer dump-autoload --optimize \
     && chmod -R ug+rwx storage bootstrap/cache \
     && chmod +x /usr/local/bin/docker-entrypoint.sh \
     && ln -sf /dev/stdout /var/log/nginx/access.log \
-    && ln -sf /dev/stderr /var/log/nginx/error.log
+    && ln -sf /dev/stderr /var/log/nginx/error.log \
+    && mkdir -p /opt/build-release \
+    && chown -R www-data:www-data /opt/build-release public/build
 
 EXPOSE 80
 

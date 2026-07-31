@@ -7,6 +7,20 @@ mkdir -p storage/framework/cache storage/framework/sessions storage/framework/vi
 chown -R www-data:www-data storage bootstrap/cache
 chmod -R ug+rwx storage bootstrap/cache
 
+# Mescla o build novo sem apagar chunks antigos (evita 404 em clientes com HTML/JS em cache).
+RELEASE_DIR=/opt/build-release
+BUILD_DIR=/var/www/html/public/build
+if [ -d "$RELEASE_DIR/assets" ]; then
+  mkdir -p "$BUILD_DIR/assets"
+  cp -a "$RELEASE_DIR/assets/." "$BUILD_DIR/assets/"
+  if [ -f "$RELEASE_DIR/manifest.json" ]; then
+    cp -a "$RELEASE_DIR/manifest.json" "$BUILD_DIR/manifest.json"
+  fi
+  # Remove só arquivos bem antigos para não crescer sem limite.
+  find "$BUILD_DIR/assets" -type f -mtime +14 -delete 2>/dev/null || true
+  chown -R www-data:www-data "$BUILD_DIR"
+fi
+
 if [ ! -f .env ]; then
   echo "ERRO: .env nao encontrado. Crie a partir do .env.example antes de subir."
   exit 1
