@@ -21,6 +21,10 @@ RUN composer install \
 
 FROM node:22-alpine AS frontend
 
+# VITE_* é embutido no JS no momento do build (não lê o .env em runtime).
+ARG VITE_APP_NAME=Levita
+ENV VITE_APP_NAME=$VITE_APP_NAME
+
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci

@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VITE_APP_NAME: ${APP_NAME:-Levita}
     container_name: levita-app
     restart: unless-stopped
     ports:
