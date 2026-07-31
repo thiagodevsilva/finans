@@ -5,6 +5,8 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffc107">
         <meta name="application-name" content="{{ config('app.name', 'Levita') }}">
+        <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+        <meta http-equiv="Pragma" content="no-cache">
 
         <title inertia>{{ config('app.name', 'Levita') }}</title>
 
