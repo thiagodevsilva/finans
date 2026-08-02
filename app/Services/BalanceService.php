@@ -74,6 +74,9 @@ class BalanceService
     /**
      * Saldo de caixa para exibição: ajusta quando a âncora vigente ficou stale
      * (lançamentos retroativos alterados depois do snapshot).
+     *
+     * No mês corrente, deriva do saldo efetivo do fim do mês anterior + fluxos
+     * de caixa do mês atual — mesma base da sugestão de recálculo.
      */
     public function effectiveBalanceAt(?Carbon $at = null): ?float
     {
@@ -89,11 +92,15 @@ class BalanceService
             return null;
         }
 
-        if ($this->staleCashAffectingQuery($anchor)->exists()) {
+        if (! $this->staleCashAffectingQuery($anchor)->exists()) {
+            return $this->balanceAt($at);
+        }
+
+        if ($at->isSameMonth(now())) {
             return $this->suggestedBalanceIgnoringLatestAnchor($at);
         }
 
-        return $this->balanceAt($at);
+        return $this->balanceWithStaleDelta($at);
     }
 
     public function balanceFromAnchor(BalanceAnchor $anchor, Carbon $at): float
@@ -115,6 +122,74 @@ class BalanceService
             ->sum('amount');
 
         return round((float) $anchor->amount + $income - $outflow, 2);
+    }
+
+    /**
+     * Saldo na data com ajuste dos lançamentos retroativos da âncora vigente.
+     */
+    public function balanceWithStaleDelta(Carbon $at): ?float
+    {
+        $anchor = $this->latestAnchor($at);
+
+        if (! $anchor) {
+            return null;
+        }
+
+        $base = $this->balanceFromAnchor($anchor, $at);
+
+        if (! $this->staleCashAffectingQuery($anchor)->exists()) {
+            return $base;
+        }
+
+        return round($base + $this->staleCashDelta($anchor), 2);
+    }
+
+    /**
+     * Delta de caixa dos lançamentos com data ≤ âncora alterados depois do snapshot.
+     */
+    public function staleCashDelta(BalanceAnchor $anchor): float
+    {
+        $asOf = $anchor->as_of_date->toDateString();
+        $createdAt = $anchor->created_at;
+
+        $staleIncome = (float) Transaction::query()
+            ->where('status', Transaction::STATUS_CONFIRMED)
+            ->where('type', Transaction::TYPE_INCOME)
+            ->whereDate('date', '<=', $asOf)
+            ->where('updated_at', '>', $createdAt)
+            ->sum('amount');
+
+        $staleOutflow = (float) $this->cashOutflowQuery()
+            ->where('status', Transaction::STATUS_CONFIRMED)
+            ->whereDate('date', '<=', $asOf)
+            ->where('updated_at', '>', $createdAt)
+            ->sum('amount');
+
+        return round($staleIncome - $staleOutflow, 2);
+    }
+
+    /**
+     * Movimentações de caixa (entradas − saídas) com date > $from e date ≤ $to.
+     */
+    public function cashFlowBetween(Carbon $from, Carbon $to): float
+    {
+        $fromDate = $from->toDateString();
+        $toDate = $to->toDateString();
+
+        $income = (float) Transaction::query()
+            ->where('status', Transaction::STATUS_CONFIRMED)
+            ->where('type', Transaction::TYPE_INCOME)
+            ->whereDate('date', '>', $fromDate)
+            ->whereDate('date', '<=', $toDate)
+            ->sum('amount');
+
+        $outflow = (float) $this->cashOutflowQuery()
+            ->where('status', Transaction::STATUS_CONFIRMED)
+            ->whereDate('date', '>', $fromDate)
+            ->whereDate('date', '<=', $toDate)
+            ->sum('amount');
+
+        return round($income - $outflow, 2);
     }
 
     public function keepPreviousMonth(User $owner, ?Carbon $today = null): BalanceAnchor
@@ -203,42 +278,31 @@ class BalanceService
     }
 
     /**
-     * Saldo sugerido tratando a âncora vigente como inválida.
+     * Saldo sugerido após âncora stale: saldo efetivo do fim do mês anterior
+     * + movimentações de caixa do mês atual até $at.
      *
-     * Soma o saldo calculado a partir da âncora vigente com os lançamentos de caixa
-     * retroativos (data ≤ âncora) alterados depois do snapshot. Não recalcula a partir
-     * da âncora anterior: isso falhava quando os retroativos tinham a mesma data da
-     * âncora (ex.: keep de 31/07 + lançamentos em 31/07), pois balanceFromAnchor usa
-     * date > as_of_date e ignorava esses valores.
+     * Assim a sugestão de agosto bate com o Saldo exibido em julho quando não
+     * houve entrada/saída de dinheiro em agosto.
      */
     public function suggestedBalanceIgnoringLatestAnchor(?Carbon $at = null): ?float
     {
         $at = $at ? $at->copy() : now();
-        $latest = $this->latestAnchor($at);
 
-        if (! $latest) {
+        if (! $this->latestAnchor($at)) {
             return null;
         }
 
-        $asOf = $latest->as_of_date->toDateString();
-        $createdAt = $latest->created_at;
+        $previousMonthEnd = $at->copy()->startOfMonth()->subDay()->endOfDay();
+        $previousMonthBalance = $this->balanceWithStaleDelta($previousMonthEnd);
 
-        $staleIncome = (float) Transaction::query()
-            ->where('status', Transaction::STATUS_CONFIRMED)
-            ->where('type', Transaction::TYPE_INCOME)
-            ->whereDate('date', '<=', $asOf)
-            ->where('updated_at', '>', $createdAt)
-            ->sum('amount');
+        if ($previousMonthBalance === null) {
+            return null;
+        }
 
-        $staleOutflow = (float) $this->cashOutflowQuery()
-            ->where('status', Transaction::STATUS_CONFIRMED)
-            ->whereDate('date', '<=', $asOf)
-            ->where('updated_at', '>', $createdAt)
-            ->sum('amount');
-
-        $current = $this->balanceFromAnchor($latest, $at);
-
-        return round($current + $staleIncome - $staleOutflow, 2);
+        return round(
+            $previousMonthBalance + $this->cashFlowBetween($previousMonthEnd, $at),
+            2
+        );
     }
 
     public function dismissStaleRecalc(): void

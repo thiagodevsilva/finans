@@ -103,7 +103,7 @@ const monthBalanceHelp =
     'Só saídas de dinheiro (PIX, débito, dinheiro etc.) e investimentos. Compras no crédito e no cartão benefício entram nos gastos do mês, mas não neste saldo.';
 
 const staleHelp =
-    'Você lançou ou alterou movimentações com data anterior à referência do saldo atual. Esse snapshot não inclui esses valores. Recalcular abre o formulário com uma sugestão para você revisar.';
+    'Você lançou ou alterou movimentações com data anterior à referência do saldo atual. A sugestão parte do saldo do fim do mês anterior e soma as movimentações de caixa deste mês.';
 
 const openUpdateBalance = (suggested = null) => {
     balanceSuggestedAmount.value = suggested;
@@ -236,7 +236,7 @@ onMounted(() => {
                     </p>
                     <p class="mt-1 text-xs text-horizon-600">
                         <template v-if="isOwner">
-                            Deseja recalcular o saldo atual? Você poderá revisar o valor sugerido antes de salvar.
+                            Deseja recalcular o saldo atual a partir do mês anterior? Você poderá revisar o valor sugerido antes de salvar.
                         </template>
                         <template v-else>
                             Peça ao responsável da conta para recalcular o saldo de caixa.

@@ -589,6 +589,7 @@ class BalanceFeaturesTest extends TestCase
                 ->where('summary.month_balance', 882.12)
             );
 
+        // Agosto sem movimentação de caixa: sugestão = Saldo de julho.
         $this->actingAs($owner)
             ->get(route('dashboard', ['month' => 8, 'year' => 2026]))
             ->assertOk()
