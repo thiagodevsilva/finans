@@ -63,7 +63,8 @@ export function paymentLabel(tx) {
 
 export function formatCardLabel(card) {
     if (!card) return '';
-    const typeLabel = card.type === 'debit' ? 'Débito' : 'Crédito';
+    const typeLabels = { debit: 'Débito', benefit: 'Benefício', credit: 'Crédito' };
+    const typeLabel = typeLabels[card.type] || 'Crédito';
     const parts = [card.name, typeLabel];
     if (card.last_four) {
         parts.push(`•••• ${card.last_four}`);

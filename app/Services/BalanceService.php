@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 class BalanceService
 {
+    public const SESSION_STALE_DISMISSED_AT = 'balance_stale_recalc_dismissed_at';
+
     public function latestAnchor(?Carbon $at = null): ?BalanceAnchor
     {
         $query = BalanceAnchor::query()->orderByDesc('as_of_date')->orderByDesc('created_at');
@@ -21,6 +23,21 @@ class BalanceService
         }
 
         return $query->first();
+    }
+
+    public function previousAnchor(BalanceAnchor $anchor): ?BalanceAnchor
+    {
+        return BalanceAnchor::query()
+            ->where(function (Builder $q) use ($anchor) {
+                $q->whereDate('as_of_date', '<', $anchor->as_of_date->toDateString())
+                    ->orWhere(function (Builder $sameDay) use ($anchor) {
+                        $sameDay->whereDate('as_of_date', $anchor->as_of_date->toDateString())
+                            ->where('created_at', '<', $anchor->created_at);
+                    });
+            })
+            ->orderByDesc('as_of_date')
+            ->orderByDesc('created_at')
+            ->first();
     }
 
     public function needsInitialAnchor(): bool
@@ -51,6 +68,11 @@ class BalanceService
             return null;
         }
 
+        return $this->balanceFromAnchor($anchor, $at);
+    }
+
+    public function balanceFromAnchor(BalanceAnchor $anchor, Carbon $at): float
+    {
         $from = $anchor->as_of_date->toDateString();
         $to = $at->toDateString();
 
@@ -100,7 +122,112 @@ class BalanceService
     }
 
     /**
+     * Lançamentos de caixa com data ≤ âncora vigente, alterados depois dela (deixam o snapshot stale).
+     */
+    public function staleCashAffectingQuery(BalanceAnchor $anchor): Builder
+    {
+        $asOf = $anchor->as_of_date->toDateString();
+        $createdAt = $anchor->created_at;
+
+        $incomeIds = Transaction::query()
+            ->where('status', Transaction::STATUS_CONFIRMED)
+            ->where('type', Transaction::TYPE_INCOME)
+            ->whereDate('date', '<=', $asOf)
+            ->where('updated_at', '>', $createdAt)
+            ->pluck('id');
+
+        $outflowIds = $this->cashOutflowQuery()
+            ->where('status', Transaction::STATUS_CONFIRMED)
+            ->whereDate('date', '<=', $asOf)
+            ->where('updated_at', '>', $createdAt)
+            ->pluck('id');
+
+        $ids = $incomeIds->merge($outflowIds)->unique()->values();
+
+        return Transaction::query()->whereIn('id', $ids);
+    }
+
+    /**
+     * Meta para o dashboard: precisa recalcular? Qual valor sugerir?
+     *
+     * @return array{needs_stale_recalc: bool, suggested_balance: float|null}
+     */
+    public function staleRecalcMeta(?Carbon $at = null): array
+    {
+        $at = $at ? $at->copy() : now();
+        $anchor = $this->latestAnchor($at);
+
+        if (! $anchor || $this->needsMonthlyCheckin($at)) {
+            return ['needs_stale_recalc' => false, 'suggested_balance' => null];
+        }
+
+        $staleQuery = $this->staleCashAffectingQuery($anchor);
+
+        if (! $staleQuery->exists()) {
+            return ['needs_stale_recalc' => false, 'suggested_balance' => null];
+        }
+
+        $dismissedAt = session(self::SESSION_STALE_DISMISSED_AT);
+        if ($dismissedAt) {
+            $latestStaleUpdate = (clone $staleQuery)->max('updated_at');
+            if ($latestStaleUpdate && Carbon::parse($latestStaleUpdate)->lte(Carbon::parse($dismissedAt))) {
+                return ['needs_stale_recalc' => false, 'suggested_balance' => null];
+            }
+        }
+
+        return [
+            'needs_stale_recalc' => true,
+            'suggested_balance' => $this->suggestedBalanceIgnoringLatestAnchor($at),
+        ];
+    }
+
+    /**
+     * Saldo sugerido tratando a âncora vigente como inválida (usa a anterior, se houver).
+     */
+    public function suggestedBalanceIgnoringLatestAnchor(?Carbon $at = null): ?float
+    {
+        $at = $at ? $at->copy() : now();
+        $latest = $this->latestAnchor($at);
+
+        if (! $latest) {
+            return null;
+        }
+
+        $previous = $this->previousAnchor($latest);
+
+        if ($previous) {
+            return $this->balanceFromAnchor($previous, $at);
+        }
+
+        $asOf = $latest->as_of_date->toDateString();
+        $createdAt = $latest->created_at;
+
+        $staleIncome = (float) Transaction::query()
+            ->where('status', Transaction::STATUS_CONFIRMED)
+            ->where('type', Transaction::TYPE_INCOME)
+            ->whereDate('date', '<=', $asOf)
+            ->where('updated_at', '>', $createdAt)
+            ->sum('amount');
+
+        $staleOutflow = (float) $this->cashOutflowQuery()
+            ->where('status', Transaction::STATUS_CONFIRMED)
+            ->whereDate('date', '<=', $asOf)
+            ->where('updated_at', '>', $createdAt)
+            ->sum('amount');
+
+        $current = $this->balanceFromAnchor($latest, $at);
+
+        return round($current + $staleIncome - $staleOutflow, 2);
+    }
+
+    public function dismissStaleRecalc(): void
+    {
+        session([self::SESSION_STALE_DISMISSED_AT => now()->toIso8601String()]);
+    }
+
+    /**
      * Query de lançamentos que reduzem o caixa (saídas de dinheiro).
+     * Cartão de crédito e benefício não entram — só débito (tipo debit) debita no ramo card.
      */
     public function cashOutflowQuery(): Builder
     {

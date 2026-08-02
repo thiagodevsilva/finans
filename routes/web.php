@@ -77,6 +77,7 @@ Route::middleware(['auth', 'last.seen'])->group(function () {
 
         Route::post('/balance-anchors', [BalanceAnchorController::class, 'store'])->name('balance-anchors.store');
         Route::post('/balance-anchors/keep', [BalanceAnchorController::class, 'keep'])->name('balance-anchors.keep');
+        Route::post('/balance-anchors/dismiss-stale', [BalanceAnchorController::class, 'dismissStale'])->name('balance-anchors.dismiss-stale');
 
         Route::post('/onboarding', [OnboardingController::class, 'store'])->name('onboarding.store');
         Route::delete('/onboarding', [OnboardingController::class, 'destroy'])->name('onboarding.destroy');

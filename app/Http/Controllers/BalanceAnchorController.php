@@ -48,4 +48,13 @@ class BalanceAnchorController extends Controller
 
         return back()->with('success', 'Saldo do mês anterior mantido.');
     }
+
+    public function dismissStale(Request $request, BalanceService $balances): RedirectResponse
+    {
+        $this->authorize('create', BalanceAnchor::class);
+
+        $balances->dismissStaleRecalc();
+
+        return back();
+    }
 }

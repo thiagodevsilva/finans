@@ -21,7 +21,7 @@ export const demoDashboardData = {
         expense_credit: 1800,
         expense_debit: 1300,
         balance: 8420.5,
-        month_balance: 1600,
+        month_balance: 3400,
         investments: 500,
     },
     balanceMeta: {

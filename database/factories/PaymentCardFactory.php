@@ -49,4 +49,13 @@ class PaymentCardFactory extends Factory
             'due_day' => 17,
         ]);
     }
+
+    public function benefit(): static
+    {
+        return $this->state(fn () => [
+            'type' => PaymentCard::TYPE_BENEFIT,
+            'closing_day' => null,
+            'due_day' => null,
+        ]);
+    }
 }

@@ -182,7 +182,7 @@ class LevitaDomainTest extends TestCase
         ]);
     }
 
-    public function test_payment_card_requires_debit_or_credit_type(): void
+    public function test_payment_card_accepts_debit_credit_and_benefit_types(): void
     {
         $account = Account::factory()->create();
         $owner = User::factory()->owner()->create(['account_id' => $account->id]);
@@ -201,6 +201,23 @@ class LevitaDomainTest extends TestCase
             'name' => 'Débito Itaú',
             'type' => 'debit',
             'last_four' => '9876',
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('payment-cards.store'), [
+                'name' => 'VR Alelo',
+                'brand' => 'other',
+                'type' => PaymentCard::TYPE_BENEFIT,
+                'last_four' => '5555',
+                'color' => '#16a34a',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('payment_cards', [
+            'name' => 'VR Alelo',
+            'type' => PaymentCard::TYPE_BENEFIT,
+            'closing_day' => null,
+            'due_day' => null,
         ]);
     }
 

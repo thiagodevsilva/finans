@@ -46,7 +46,7 @@ const form = useForm({
 watch(
     () => form.type,
     (type) => {
-        if (type === 'debit') {
+        if (type !== 'credit') {
             form.closing_day = null;
             form.due_day = null;
         } else if (!form.closing_day) {

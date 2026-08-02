@@ -68,7 +68,7 @@ const chartOptions = {
 };
 
 const applyFilters = (event) => {
-    const form = event.target;
+    const form = event.target.closest('form');
     router.get(route('reports.index'), {
         month: form.month.value,
         year: form.year.value,

@@ -70,7 +70,7 @@ class PaymentCardRequest extends FormRequest
             $this->merge(['bank_account_id' => null]);
         }
 
-        if ($this->input('type') === PaymentCard::TYPE_DEBIT) {
+        if ($this->input('type') !== PaymentCard::TYPE_CREDIT) {
             $this->merge([
                 'closing_day' => null,
                 'due_day' => null,

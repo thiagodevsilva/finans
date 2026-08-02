@@ -20,7 +20,7 @@
 | Owner | `users.role = owner` — controle total |
 | Dependent | `users.role = dependent` — lança/vê; sem categorias/membros |
 | Category | Categoria da conta |
-| PaymentCard | Cartão (`payment_cards`) — crédito tem `closing_day`/`due_day` |
+| PaymentCard | Cartão (`payment_cards`) — crédito tem `closing_day`/`due_day`; benefício não debita caixa nem vira fatura |
 | CreditCardInvoice | Fatura do cartão de crédito (`credit_card_invoices`) |
 | BankAccount | Conta bancária opcional (`bank_accounts`) — entradas e pagamento de fatura |
 | BalanceAnchor | Âncora de saldo de caixa (`balance_anchors`) — owner informa; saldo recalcula |
@@ -54,7 +54,7 @@ database/migrations/
 5. Identidade visual: amarelo `#ffc107` primário; azul `#2563eb` só em CTAs.
 6. Entradas usam conta bancária opcional; saídas usam forma de pagamento (e cartão quando aplicável). Débito / débito automático saem do caixa.
 7. **Despesa = compra.** Pagamento de fatura é `type=transfer` e **não** entra em totais de gasto.
-8. Relatórios/dashboard somam só `status=confirmed` e `type` income/expense (nunca transfer). **Saldo** do dashboard = caixa com âncora; **saldo do mês** = income − expense − investment. Gastos no crédito vs débito separam onde se comprou.
+8. Relatórios/dashboard somam só `status=confirmed` e `type` income/expense (nunca transfer). **Saldo** do dashboard = caixa com âncora; **saldo do mês** = income − saídas de dinheiro do mês − investment (crédito e benefício não entram). Gastos no crédito vs débito separam onde se comprou; benefício entra no total de gastos, mas em nenhum dos dois.
 9. Parcelas: UI do mês mostra só a parcela do período; detalhe da compra no plano.
 10. Contas fixas: `planned` até confirmar; só confirmadas contam como gasto. No dashboard, % das contas fixas é por **valor**.
 11. **Testes nunca usam o MySQL do app.** A suite força `sqlite :memory:` (`phpunit.xml` + `CreatesApplication`). Requer extensão `pdo_sqlite` (`php8.1-sqlite3`).

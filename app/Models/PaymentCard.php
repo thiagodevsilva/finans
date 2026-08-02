@@ -35,9 +35,12 @@ class PaymentCard extends Model
 
     public const TYPE_DEBIT = 'debit';
 
+    public const TYPE_BENEFIT = 'benefit';
+
     public const TYPES = [
         self::TYPE_CREDIT,
         self::TYPE_DEBIT,
+        self::TYPE_BENEFIT,
     ];
 
     protected $fillable = [
@@ -93,6 +96,7 @@ class PaymentCard extends Model
     {
         return match ($type) {
             self::TYPE_DEBIT => 'Débito',
+            self::TYPE_BENEFIT => 'Benefício',
             default => 'Crédito',
         };
     }

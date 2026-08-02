@@ -48,7 +48,14 @@ class DashboardController extends Controller
             ->whereHas('paymentCard', fn ($q) => $q->where('type', PaymentCard::TYPE_CREDIT))
             ->sum('amount');
 
-        $expenseDebit = round($expense - $expenseCredit, 2);
+        $expenseBenefit = (float) (clone $confirmedInMonth())
+            ->where('type', Transaction::TYPE_EXPENSE)
+            ->where('payment_method', Transaction::PAYMENT_CARD)
+            ->whereHas('paymentCard', fn ($q) => $q->where('type', PaymentCard::TYPE_BENEFIT))
+            ->sum('amount');
+
+        // Débito/PIX/dinheiro etc. — exclui crédito e benefício (não saem do caixa do mês).
+        $expenseDebit = round($expense - $expenseCredit - $expenseBenefit, 2);
 
         $recent = Transaction::query()
             ->with([
@@ -90,10 +97,15 @@ class DashboardController extends Controller
             ? null
             : $balances->balanceAt($previousMonthEnd);
 
+        $staleRecalc = $isCurrentMonth
+            ? $balances->staleRecalcMeta()
+            : ['needs_stale_recalc' => false, 'suggested_balance' => null];
+
         return Inertia::render('Dashboard', [
             'summary' => [
                 'balance' => $cashBalance,
-                'month_balance' => round($income - $expense - $investments, 2),
+                // Só saídas de dinheiro do mês (crédito e benefício não entram).
+                'month_balance' => round($income - $expenseDebit - $investments, 2),
                 'income' => $income,
                 'expense' => $expense,
                 'expense_credit' => $expenseCredit,
@@ -106,6 +118,8 @@ class DashboardController extends Controller
                 'needs_monthly_checkin' => $balances->needsMonthlyCheckin(),
                 'as_of_date' => $latestAnchor?->as_of_date?->toDateString(),
                 'previous_month_balance' => $previousMonthBalance,
+                'needs_stale_recalc' => $staleRecalc['needs_stale_recalc'],
+                'suggested_balance' => $staleRecalc['suggested_balance'],
             ],
             'recurringSummary' => [
                 'paid_amount' => $paidAmount,

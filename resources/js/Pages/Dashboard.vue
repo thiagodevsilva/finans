@@ -2,6 +2,7 @@
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BalanceCheckinModal from '@/Components/BalanceCheckinModal.vue';
 import Card from '@/Components/Card.vue';
+import HelpTip from '@/Components/HelpTip.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import TourDemoBanner from '@/Components/TourDemoBanner.vue';
@@ -25,6 +26,8 @@ const props = defineProps({
             needs_monthly_checkin: false,
             as_of_date: null,
             previous_month_balance: null,
+            needs_stale_recalc: false,
+            suggested_balance: null,
         }),
     },
     recurringSummary: {
@@ -46,6 +49,7 @@ const props = defineProps({
 const page = usePage();
 const showWelcome = ref(false);
 const balanceModalMode = ref(null); // initial | monthly | update | null
+const balanceSuggestedAmount = ref(null);
 const { startFirstSetup, startTour, resumeIfActive, skipOnboarding, isTourActive } = useAppTour();
 const { isDemoTour, demoDashboardData } = useTourDemo();
 
@@ -86,13 +90,38 @@ const balanceToneClass = computed(() => {
 
 const showBalanceModal = computed(() => balanceModalMode.value != null);
 
-const openUpdateBalance = () => {
+const showStaleBanner = computed(() =>
+    !showingDemo.value
+    && !showWelcome.value
+    && balanceMeta.value.needs_stale_recalc
+    && !balanceMeta.value.needs_initial
+    && !balanceMeta.value.needs_monthly_checkin
+    && balanceModalMode.value == null,
+);
+
+const monthBalanceHelp =
+    'Só saídas de dinheiro (PIX, débito, dinheiro etc.) e investimentos. Compras no crédito e no cartão benefício entram nos gastos do mês, mas não neste saldo.';
+
+const staleHelp =
+    'Você lançou ou alterou movimentações com data anterior à referência do saldo atual. Esse snapshot não inclui esses valores. Recalcular abre o formulário com uma sugestão para você revisar.';
+
+const openUpdateBalance = (suggested = null) => {
+    balanceSuggestedAmount.value = suggested;
     balanceModalMode.value = 'update';
+};
+
+const openStaleRecalc = () => {
+    openUpdateBalance(balanceMeta.value.suggested_balance);
+};
+
+const dismissStaleRecalc = () => {
+    router.post(route('balance-anchors.dismiss-stale'), {}, { preserveScroll: true });
 };
 
 const closeBalanceModal = () => {
     if (balanceModalMode.value === 'update') {
         balanceModalMode.value = null;
+        balanceSuggestedAmount.value = null;
     }
 };
 
@@ -101,11 +130,13 @@ const syncBalanceModals = () => {
 
     if (balanceMeta.value.needs_initial) {
         balanceModalMode.value = 'initial';
+        balanceSuggestedAmount.value = null;
         return;
     }
 
     if (balanceMeta.value.needs_monthly_checkin) {
         balanceModalMode.value = 'monthly';
+        balanceSuggestedAmount.value = null;
         return;
     }
 
@@ -121,7 +152,7 @@ watch(
 );
 
 const applyFilters = (event) => {
-    const form = event.target;
+    const form = event.target.closest('form');
     router.get(route('dashboard'), {
         month: form.month.value,
         year: form.year.value,
@@ -130,7 +161,6 @@ const applyFilters = (event) => {
 
 const acceptWelcome = () => {
     showWelcome.value = false;
-    // Modal já apresentou o Levita; o tour segue pelas contas.
     startFirstSetup('dash-nav-contas');
 };
 
@@ -193,6 +223,46 @@ onMounted(() => {
             </div>
         </div>
 
+        <div
+            v-if="showStaleBanner"
+            class="mb-4 rounded-[16px] border border-amber-200 bg-amber-50 px-4 py-3 shadow-soft"
+            data-tour="dash-stale-recalc"
+        >
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-semibold text-navy-700">
+                        Lançamentos anteriores à data de referência do saldo foram alterados
+                        <HelpTip class="ml-1" :text="staleHelp" label="Sobre recalcular o saldo" />
+                    </p>
+                    <p class="mt-1 text-xs text-horizon-600">
+                        <template v-if="isOwner">
+                            Deseja recalcular o saldo atual? Você poderá revisar o valor sugerido antes de salvar.
+                        </template>
+                        <template v-else>
+                            Peça ao responsável da conta para recalcular o saldo de caixa.
+                        </template>
+                    </p>
+                    <p
+                        v-if="isOwner && balanceMeta.suggested_balance != null"
+                        class="mt-2 text-sm text-horizon-600"
+                    >
+                        Sugestão:
+                        <span class="font-semibold tabular-nums text-navy-700">
+                            {{ formatBRL(balanceMeta.suggested_balance) }}
+                        </span>
+                    </p>
+                </div>
+                <div v-if="isOwner" class="flex shrink-0 flex-wrap gap-2">
+                    <SecondaryButton class="!px-3 !py-1.5 text-xs" type="button" @click="dismissStaleRecalc">
+                        Agora não
+                    </SecondaryButton>
+                    <PrimaryButton class="!px-3 !py-1.5 text-xs" type="button" @click="openStaleRecalc">
+                        Recalcular
+                    </PrimaryButton>
+                </div>
+            </div>
+        </div>
+
         <div data-tour="dash-stats" class="mb-4 sm:mb-6">
             <div class="rounded-[16px] bg-white px-4 py-4 shadow-soft sm:px-6 sm:py-5">
                 <div class="flex flex-wrap items-start justify-between gap-3">
@@ -207,6 +277,7 @@ onMounted(() => {
                         </p>
                         <p class="mt-2 text-sm text-horizon-500">
                             Saldo do mês
+                            <HelpTip class="ml-1" :text="monthBalanceHelp" label="Sobre o saldo do mês" />
                             <span
                                 class="ml-1 font-semibold tabular-nums"
                                 :class="summary.month_balance >= 0 ? 'text-emerald-600' : 'text-red-600'"
@@ -221,7 +292,7 @@ onMounted(() => {
                             class="!px-3 !py-1.5 text-xs sm:text-sm"
                             type="button"
                             data-tour="dash-balance-update"
-                            @click="openUpdateBalance"
+                            @click="openUpdateBalance()"
                         >
                             Atualizar saldo
                         </SecondaryButton>
@@ -298,6 +369,7 @@ onMounted(() => {
             :show="showBalanceModal"
             :mode="balanceModalMode || 'initial'"
             :previous-month-balance="balanceMeta.previous_month_balance"
+            :suggested-amount="balanceSuggestedAmount"
             @close="closeBalanceModal"
         />
     </AppLayout>

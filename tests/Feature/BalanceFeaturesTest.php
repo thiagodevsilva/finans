@@ -113,7 +113,7 @@ class BalanceFeaturesTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('balanceMeta.needs_initial', false)
                 ->where('summary.balance', 1050)
-                ->where('summary.month_balance', -30) // 200 - 80 - 50 - 100
+                ->where('summary.month_balance', 50) // 200 - 50(PIX) - 100(invest); crédito 80 não entra
                 ->where('summary.expense_credit', 80)
                 ->where('summary.expense_debit', 50)
                 ->where('summary.investments', 100)
@@ -300,6 +300,143 @@ class BalanceFeaturesTest extends TestCase
                 ->where('recurringSummary.total_count', 2)
                 ->where('recurringSummary.paid_amount', 1400)
                 ->where('recurringSummary.pending_amount', 120)
+            );
+    }
+
+    public function test_benefit_card_expense_is_neutral_on_cash_and_month_balance(): void
+    {
+        $this->travelTo('2026-07-20');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+        $benefitCard = PaymentCard::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'VR',
+            'brand' => 'other',
+            'type' => PaymentCard::TYPE_BENEFIT,
+            'last_four' => '9999',
+            'color' => '#16a34a',
+            'closing_day' => null,
+            'due_day' => null,
+        ]);
+
+        BalanceAnchor::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'amount' => 1000,
+            'as_of_date' => '2026-07-01',
+            'source' => BalanceAnchor::SOURCE_INITIAL,
+            'checkin_month' => '2026-07',
+        ]);
+
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 80,
+            'description' => 'Almoço VR',
+            'date' => '2026-07-15',
+            'payment_method' => Transaction::PAYMENT_CARD,
+            'payment_card_id' => $benefitCard->id,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 40,
+            'description' => 'PIX',
+            'date' => '2026-07-16',
+            'payment_method' => Transaction::PAYMENT_PIX,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 7, 'year' => 2026]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('summary.balance', 960)
+                ->where('summary.expense', 120)
+                ->where('summary.expense_credit', 0)
+                ->where('summary.expense_debit', 40)
+                ->where('summary.month_balance', -40)
+            );
+    }
+
+    public function test_stale_retroactive_cash_movement_prompts_recalc(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->travelTo('2026-07-01 12:00:00');
+
+        BalanceAnchor::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'amount' => 1000,
+            'as_of_date' => '2026-07-01',
+            'source' => BalanceAnchor::SOURCE_INITIAL,
+            'checkin_month' => '2026-07',
+        ]);
+
+        $this->travelTo('2026-08-01 09:00:00');
+
+        BalanceAnchor::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'amount' => 1000,
+            'as_of_date' => '2026-07-31',
+            'source' => BalanceAnchor::SOURCE_MONTHLY_KEEP,
+            'checkin_month' => '2026-08',
+        ]);
+
+        $this->travelTo('2026-08-05 10:00:00');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('balanceMeta.needs_stale_recalc', false)
+                ->where('summary.balance', 1000)
+            );
+
+        // Lançamento retroativo depois do keep — data ≤ âncora vigente.
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 150,
+            'description' => 'PIX esquecido',
+            'date' => '2026-07-20',
+            'payment_method' => Transaction::PAYMENT_PIX,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('balanceMeta.needs_stale_recalc', true)
+                ->where('balanceMeta.suggested_balance', 850)
+                ->where('summary.balance', 1000)
+            );
+
+        $this->actingAs($owner)
+            ->post(route('balance-anchors.dismiss-stale'))
+            ->assertRedirect();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('balanceMeta.needs_stale_recalc', false)
             );
     }
 }

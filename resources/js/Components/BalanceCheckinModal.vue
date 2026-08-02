@@ -16,6 +16,8 @@ const props = defineProps({
         default: 'initial', // initial | monthly | update
     },
     previousMonthBalance: { type: Number, default: null },
+    /** Valor sugerido ao abrir em modo update (ex.: recálculo após retroativos). */
+    suggestedAmount: { type: [Number, String], default: null },
 });
 
 const emit = defineEmits(['close']);
@@ -49,11 +51,13 @@ const description = computed(() => {
 const closeable = computed(() => props.mode === 'update');
 
 watch(
-    () => [props.show, props.mode],
+    () => [props.show, props.mode, props.suggestedAmount],
     ([show]) => {
         if (!show) return;
         form.clearErrors();
-        form.amount = '';
+        form.amount = props.suggestedAmount != null && props.suggestedAmount !== ''
+            ? String(props.suggestedAmount)
+            : '';
         form.as_of_date = today();
         form.source = props.mode === 'initial' ? 'initial' : (props.mode === 'monthly' ? 'monthly_update' : 'manual');
     },

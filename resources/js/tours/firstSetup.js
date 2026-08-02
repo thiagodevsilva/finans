@@ -56,7 +56,7 @@ export const firstSetupSteps = [
         query: { tour: FIRST_SETUP_TOUR_ID },
         attachTo: { element: '[data-tour="pc-form"]', on: 'bottom' },
         title: 'Cartões',
-        text: 'Mesma ideia. Aqui você cadastra crédito e débito. O tutorial não exige salvar nada. É só para você ver onde fica.',
+        text: 'Mesma ideia. Aqui você cadastra crédito, débito e benefício (VR/VA). O tutorial não exige salvar nada. É só para você ver onde fica.',
     },
     {
         id: 'pc-name',
