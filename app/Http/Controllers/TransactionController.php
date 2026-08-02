@@ -12,6 +12,7 @@ use App\Services\CreditCardInvoiceService;
 use App\Services\CreditCardPaymentService;
 use App\Services\InstallmentPlanService;
 use App\Services\RecurringBillService;
+use App\Services\BalanceService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class TransactionController extends Controller
         private readonly CreditCardPaymentService $paymentService,
         private readonly InstallmentPlanService $installmentPlanService,
         private readonly RecurringBillService $recurringBillService,
+        private readonly BalanceService $balances,
     ) {}
 
     public function index(Request $request): Response
@@ -241,6 +243,7 @@ class TransactionController extends Controller
         }
 
         if ($data['type'] === Transaction::TYPE_TRANSFER) {
+            $this->balances->recordRetroactiveCashDeletion($transaction);
             $transaction->delete();
 
             return $this->storeInvoicePayment($request, $data);
@@ -288,6 +291,7 @@ class TransactionController extends Controller
     {
         $this->authorize('delete', $transaction);
 
+        $this->balances->recordRetroactiveCashDeletion($transaction);
         $transaction->delete();
 
         return redirect()->route('transactions.index')->with('success', 'Transação excluída com sucesso.');

@@ -103,7 +103,7 @@ const monthBalanceHelp =
     'Só saídas de dinheiro (PIX, débito, dinheiro etc.) e investimentos. Compras no crédito e no cartão benefício entram nos gastos do mês, mas não neste saldo.';
 
 const staleHelp =
-    'Você lançou ou alterou movimentações com data anterior à referência do saldo atual. A sugestão parte do saldo do fim do mês anterior e soma as movimentações de caixa deste mês.';
+    'Você lançou, alterou ou excluiu movimentações com data anterior à referência do saldo atual. A sugestão parte do saldo do fim do mês anterior e soma as movimentações de caixa deste mês.';
 
 const openUpdateBalance = (suggested = null) => {
     balanceSuggestedAmount.value = suggested;
@@ -231,7 +231,7 @@ onMounted(() => {
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
                     <p class="text-sm font-semibold text-navy-700">
-                        Lançamentos anteriores à data de referência do saldo foram alterados
+                        Lançamentos anteriores à data de referência do saldo foram alterados ou excluídos
                         <HelpTip class="ml-1" :text="staleHelp" label="Sobre recalcular o saldo" />
                     </p>
                     <p class="mt-1 text-xs text-horizon-600">

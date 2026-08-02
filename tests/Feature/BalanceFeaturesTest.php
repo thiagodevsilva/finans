@@ -599,4 +599,74 @@ class BalanceFeaturesTest extends TestCase
                 ->where('summary.balance', 26790.71)
             );
     }
+
+    public function test_deleting_baked_in_july_expense_prompts_august_stale_recalc(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->travelTo('2026-07-20 10:00:00');
+
+        $expense = Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 100,
+            'description' => 'Teste',
+            'date' => '2026-07-20',
+            'payment_method' => Transaction::PAYMENT_CASH,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $this->travelTo('2026-08-01 09:00:00');
+
+        // Âncora já inclui a despesa de R$ 100 (snapshot "assado").
+        BalanceAnchor::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'amount' => 26790.71,
+            'as_of_date' => '2026-07-31',
+            'source' => BalanceAnchor::SOURCE_MONTHLY_KEEP,
+            'checkin_month' => '2026-08',
+        ]);
+
+        $this->travelTo('2026-08-05 12:00:00');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('balanceMeta.needs_stale_recalc', false)
+                ->where('summary.balance', 26790.71)
+            );
+
+        $this->actingAs($owner)
+            ->delete(route('transactions.destroy', $expense))
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('transactions', ['id' => $expense->id]);
+
+        $account->refresh();
+        $this->assertSame(100.0, (float) $account->balance_stale_adjustment);
+        $this->assertNotNull($account->balance_stale_at);
+
+        // Excluir saída embutida na âncora deve subir o saldo sugerido em R$ 100.
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 8, 'year' => 2026]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('balanceMeta.needs_stale_recalc', true)
+                ->where('balanceMeta.suggested_balance', 26890.71)
+                ->where('summary.balance', 26890.71)
+            );
+
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 7, 'year' => 2026]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('summary.balance', 26890.71)
+            );
+    }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Account;
 use App\Models\BalanceAnchor;
 use App\Models\PaymentCard;
 use App\Models\Transaction;
@@ -73,7 +74,7 @@ class BalanceService
 
     /**
      * Saldo de caixa para exibição: ajusta quando a âncora vigente ficou stale
-     * (lançamentos retroativos alterados depois do snapshot).
+     * (lançamentos retroativos alterados/excluídos depois do snapshot).
      *
      * No mês corrente, deriva do saldo efetivo do fim do mês anterior + fluxos
      * de caixa do mês atual — mesma base da sugestão de recálculo.
@@ -92,7 +93,7 @@ class BalanceService
             return null;
         }
 
-        if (! $this->staleCashAffectingQuery($anchor)->exists()) {
+        if (! $this->isAnchorStale($anchor)) {
             return $this->balanceAt($at);
         }
 
@@ -125,7 +126,7 @@ class BalanceService
     }
 
     /**
-     * Saldo na data com ajuste dos lançamentos retroativos da âncora vigente.
+     * Saldo na data com ajuste dos lançamentos retroativos / exclusões da âncora vigente.
      */
     public function balanceWithStaleDelta(Carbon $at): ?float
     {
@@ -136,12 +137,13 @@ class BalanceService
         }
 
         $base = $this->balanceFromAnchor($anchor, $at);
+        $delta = $this->staleCashDelta($anchor) + $this->accountStaleAdjustment();
 
-        if (! $this->staleCashAffectingQuery($anchor)->exists()) {
+        if (abs($delta) < 0.00001) {
             return $base;
         }
 
-        return round($base + $this->staleCashDelta($anchor), 2);
+        return round($base + $delta, 2);
     }
 
     /**
@@ -149,6 +151,10 @@ class BalanceService
      */
     public function staleCashDelta(BalanceAnchor $anchor): float
     {
+        if (! $this->staleCashAffectingQuery($anchor)->exists()) {
+            return 0.0;
+        }
+
         $asOf = $anchor->as_of_date->toDateString();
         $createdAt = $anchor->created_at;
 
@@ -166,6 +172,17 @@ class BalanceService
             ->sum('amount');
 
         return round($staleIncome - $staleOutflow, 2);
+    }
+
+    public function accountStaleAdjustment(): float
+    {
+        $account = $this->currentAccount();
+
+        if (! $account) {
+            return 0.0;
+        }
+
+        return round((float) $account->balance_stale_adjustment, 2);
     }
 
     /**
@@ -243,6 +260,19 @@ class BalanceService
         return Transaction::query()->whereIn('id', $ids);
     }
 
+    public function isAnchorStale(BalanceAnchor $anchor): bool
+    {
+        if ($this->staleCashAffectingQuery($anchor)->exists()) {
+            return true;
+        }
+
+        $account = $this->currentAccount();
+
+        return $account
+            && $account->balance_stale_at
+            && abs((float) $account->balance_stale_adjustment) >= 0.01;
+    }
+
     /**
      * Meta para o dashboard: precisa recalcular? Qual valor sugerir?
      *
@@ -257,16 +287,14 @@ class BalanceService
             return ['needs_stale_recalc' => false, 'suggested_balance' => null];
         }
 
-        $staleQuery = $this->staleCashAffectingQuery($anchor);
-
-        if (! $staleQuery->exists()) {
+        if (! $this->isAnchorStale($anchor)) {
             return ['needs_stale_recalc' => false, 'suggested_balance' => null];
         }
 
         $dismissedAt = session(self::SESSION_STALE_DISMISSED_AT);
         if ($dismissedAt) {
-            $latestStaleUpdate = (clone $staleQuery)->max('updated_at');
-            if ($latestStaleUpdate && Carbon::parse($latestStaleUpdate)->lte(Carbon::parse($dismissedAt))) {
+            $latestStaleMoment = $this->latestStaleMoment($anchor);
+            if ($latestStaleMoment && $latestStaleMoment->lte(Carbon::parse($dismissedAt))) {
                 return ['needs_stale_recalc' => false, 'suggested_balance' => null];
             }
         }
@@ -280,9 +308,6 @@ class BalanceService
     /**
      * Saldo sugerido após âncora stale: saldo efetivo do fim do mês anterior
      * + movimentações de caixa do mês atual até $at.
-     *
-     * Assim a sugestão de agosto bate com o Saldo exibido em julho quando não
-     * houve entrada/saída de dinheiro em agosto.
      */
     public function suggestedBalanceIgnoringLatestAnchor(?Carbon $at = null): ?float
     {
@@ -308,6 +333,64 @@ class BalanceService
     public function dismissStaleRecalc(): void
     {
         session([self::SESSION_STALE_DISMISSED_AT => now()->toIso8601String()]);
+    }
+
+    /**
+     * Antes de excluir: se o lançamento já estava embutido na âncora vigente,
+     * registra o ajuste inverso para o banner de recálculo (exclusão some o registro).
+     */
+    public function recordRetroactiveCashDeletion(Transaction $transaction): void
+    {
+        if ($transaction->status !== Transaction::STATUS_CONFIRMED) {
+            return;
+        }
+
+        $effect = $this->cashEffect($transaction);
+        if (abs($effect) < 0.00001) {
+            return;
+        }
+
+        $anchor = $this->latestAnchor();
+        if (! $anchor) {
+            return;
+        }
+
+        if ($transaction->date->toDateString() > $anchor->as_of_date->toDateString()) {
+            return;
+        }
+
+        // Criado depois da âncora: só vivia no overlay stale; sumir já limpa o detector antigo.
+        if ($transaction->created_at && $transaction->created_at->gt($anchor->created_at)) {
+            return;
+        }
+
+        $account = Account::query()->find($transaction->account_id);
+        if (! $account) {
+            return;
+        }
+
+        $account->balance_stale_adjustment = round(
+            (float) $account->balance_stale_adjustment - $effect,
+            2
+        );
+        $account->balance_stale_at = now();
+        $account->save();
+    }
+
+    /**
+     * Efeito no caixa: entrada positiva, saída de dinheiro negativa; 0 se neutro.
+     */
+    public function cashEffect(Transaction $transaction): float
+    {
+        if ($transaction->type === Transaction::TYPE_INCOME) {
+            return (float) $transaction->amount;
+        }
+
+        if ($this->cashOutflowQuery()->whereKey($transaction->id)->exists()) {
+            return -1 * (float) $transaction->amount;
+        }
+
+        return 0.0;
     }
 
     /**
@@ -347,6 +430,47 @@ class BalanceService
         });
     }
 
+    protected function latestStaleMoment(BalanceAnchor $anchor): ?Carbon
+    {
+        $moments = [];
+
+        $staleQuery = $this->staleCashAffectingQuery($anchor);
+        if ($staleQuery->exists()) {
+            $maxUpdated = (clone $staleQuery)->max('updated_at');
+            if ($maxUpdated) {
+                $moments[] = Carbon::parse($maxUpdated);
+            }
+        }
+
+        $account = $this->currentAccount();
+        if ($account?->balance_stale_at) {
+            $moments[] = $account->balance_stale_at->copy();
+        }
+
+        if ($moments === []) {
+            return null;
+        }
+
+        return collect($moments)->sortByDesc(fn (Carbon $c) => $c->timestamp)->first();
+    }
+
+    protected function currentAccount(): ?Account
+    {
+        if (! auth()->check()) {
+            return null;
+        }
+
+        return Account::query()->find(auth()->user()->account_id);
+    }
+
+    protected function clearAccountStaleState(string $accountId): void
+    {
+        Account::query()->whereKey($accountId)->update([
+            'balance_stale_at' => null,
+            'balance_stale_adjustment' => 0,
+        ]);
+    }
+
     protected function createAnchor(
         User $owner,
         float $amount,
@@ -354,13 +478,17 @@ class BalanceService
         string $source,
         ?string $checkinMonth,
     ): BalanceAnchor {
-        return DB::transaction(fn () => BalanceAnchor::create([
-            'account_id' => $owner->account_id,
-            'user_id' => $owner->id,
-            'amount' => $amount,
-            'as_of_date' => $asOfDate,
-            'source' => $source,
-            'checkin_month' => $checkinMonth,
-        ]));
+        return DB::transaction(function () use ($owner, $amount, $asOfDate, $source, $checkinMonth) {
+            $this->clearAccountStaleState($owner->account_id);
+
+            return BalanceAnchor::create([
+                'account_id' => $owner->account_id,
+                'user_id' => $owner->id,
+                'amount' => $amount,
+                'as_of_date' => $asOfDate,
+                'source' => $source,
+                'checkin_month' => $checkinMonth,
+            ]);
+        });
     }
 }

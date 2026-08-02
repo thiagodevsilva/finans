@@ -13,6 +13,13 @@ class Account extends Model
 
     protected $fillable = [
         'name',
+        'balance_stale_at',
+        'balance_stale_adjustment',
+    ];
+
+    protected $casts = [
+        'balance_stale_at' => 'datetime',
+        'balance_stale_adjustment' => 'decimal:2',
     ];
 
     public function users(): HasMany
