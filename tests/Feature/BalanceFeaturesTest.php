@@ -425,7 +425,7 @@ class BalanceFeaturesTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('balanceMeta.needs_stale_recalc', true)
                 ->where('balanceMeta.suggested_balance', 850)
-                ->where('summary.balance', 1000)
+                ->where('summary.balance', 850)
             );
 
         $this->actingAs($owner)
@@ -497,7 +497,7 @@ class BalanceFeaturesTest extends TestCase
                 ->where('summary.month_balance', 0)
                 ->where('balanceMeta.needs_stale_recalc', true)
                 ->where('balanceMeta.suggested_balance', 1300)
-                ->where('summary.balance', 1000)
+                ->where('summary.balance', 1300)
             );
     }
 
@@ -537,5 +537,65 @@ class BalanceFeaturesTest extends TestCase
 
         $this->assertSame(1000.0, $balances->balanceAt($julyEnd));
         $this->assertSame(850.0, $balances->effectiveBalanceAt($julyEnd));
+    }
+
+    public function test_stale_suggestion_includes_same_day_retroactive_entries_as_july_anchor(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->travelTo('2026-08-01 09:00:00');
+
+        BalanceAnchor::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'amount' => 25908.59,
+            'as_of_date' => '2026-07-31',
+            'source' => BalanceAnchor::SOURCE_MONTHLY_KEEP,
+            'checkin_month' => '2026-08',
+        ]);
+
+        $this->travelTo('2026-08-05 10:00:00');
+
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_INCOME,
+            'amount' => 982.12,
+            'description' => 'Restituição',
+            'date' => '2026-07-31',
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 100,
+            'description' => 'Teste',
+            'date' => '2026-07-31',
+            'payment_method' => Transaction::PAYMENT_CASH,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 7, 'year' => 2026]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('summary.balance', 26790.71)
+                ->where('summary.month_balance', 882.12)
+            );
+
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 8, 'year' => 2026]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('balanceMeta.needs_stale_recalc', true)
+                ->where('balanceMeta.suggested_balance', 26790.71)
+                ->where('summary.balance', 26790.71)
+            );
     }
 }

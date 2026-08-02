@@ -23,9 +23,7 @@ class DashboardController extends Controller
 
         $isCurrentMonth = $start->isSameMonth(now());
         $balanceAt = $isCurrentMonth ? now() : $end->copy();
-        $cashBalance = $isCurrentMonth
-            ? $balances->balanceAt($balanceAt)
-            : $balances->effectiveBalanceAt($balanceAt);
+        $cashBalance = $balances->effectiveBalanceAt($balanceAt);
         $latestAnchor = $balances->latestAnchor($balanceAt);
 
         $confirmedInMonth = fn () => Transaction::query()

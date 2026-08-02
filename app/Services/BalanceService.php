@@ -203,7 +203,13 @@ class BalanceService
     }
 
     /**
-     * Saldo sugerido tratando a âncora vigente como inválida (usa a anterior, se houver).
+     * Saldo sugerido tratando a âncora vigente como inválida.
+     *
+     * Soma o saldo calculado a partir da âncora vigente com os lançamentos de caixa
+     * retroativos (data ≤ âncora) alterados depois do snapshot. Não recalcula a partir
+     * da âncora anterior: isso falhava quando os retroativos tinham a mesma data da
+     * âncora (ex.: keep de 31/07 + lançamentos em 31/07), pois balanceFromAnchor usa
+     * date > as_of_date e ignorava esses valores.
      */
     public function suggestedBalanceIgnoringLatestAnchor(?Carbon $at = null): ?float
     {
@@ -212,12 +218,6 @@ class BalanceService
 
         if (! $latest) {
             return null;
-        }
-
-        $previous = $this->previousAnchor($latest);
-
-        if ($previous) {
-            return $this->balanceFromAnchor($previous, $at);
         }
 
         $asOf = $latest->as_of_date->toDateString();
