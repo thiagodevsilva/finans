@@ -1,16 +1,21 @@
 <script setup>
 import AppMark from '@/Components/AppMark.vue';
+import SupportNoticeModal from '@/Components/SupportNoticeModal.vue';
 import TourHelpButton from '@/Components/TourHelpButton.vue';
 import { useAppTour } from '@/Composables/useAppTour';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
+
+const SUPPORT_NOTICE_KEY = 'levita.support.notice.dismissed';
+const SUPPORT_NOTICE_SESSION_KEY = 'levita.support.notice.seen';
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
 const account = computed(() => page.props.auth.account);
 const flash = computed(() => page.props.flash);
 const mobileOpen = ref(false);
-const { restartOnboarding } = useAppTour();
+const showSupportNotice = ref(false);
+const { restartOnboarding, isTourActive } = useAppTour();
 
 const links = [
     { name: 'Dashboard', route: 'dashboard', match: 'dashboard' },
@@ -34,8 +39,42 @@ const onTourSidebar = (event) => {
     mobileOpen.value = Boolean(event.detail?.open);
 };
 
+const shouldOfferSupportNotice = () => {
+    // Deixa o modal de boas-vindas / tutorial ter prioridade no primeiro acesso
+    if (user.value?.onboarding_status == null) {
+        return false;
+    }
+    if (isTourActive()) {
+        return false;
+    }
+    try {
+        if (localStorage.getItem(SUPPORT_NOTICE_KEY) === '1') {
+            return false;
+        }
+        if (sessionStorage.getItem(SUPPORT_NOTICE_SESSION_KEY) === '1') {
+            return false;
+        }
+    } catch {
+        // storage indisponível — ainda assim oferece o aviso
+    }
+    return true;
+};
+
+const dismissSupportNotice = ({ dontShowAgain }) => {
+    showSupportNotice.value = false;
+    try {
+        sessionStorage.setItem(SUPPORT_NOTICE_SESSION_KEY, '1');
+        if (dontShowAgain) {
+            localStorage.setItem(SUPPORT_NOTICE_KEY, '1');
+        }
+    } catch {
+        // storage indisponível
+    }
+};
+
 onMounted(() => {
     window.addEventListener('levita:tour-sidebar', onTourSidebar);
+    showSupportNotice.value = shouldOfferSupportNotice();
 });
 
 onUnmounted(() => {
@@ -45,6 +84,8 @@ onUnmounted(() => {
 
 <template>
     <div class="flex min-h-screen w-full bg-lightPrimary">
+        <SupportNoticeModal :show="showSupportNotice" @dismiss="dismissSupportNotice" />
+
         <!-- Sidebar estilo Horizon (branco) + acento Levita -->
         <aside
             class="fixed z-50 flex h-full w-[280px] flex-col bg-white pb-6 shadow-2xl shadow-white/5 transition-transform duration-200 xl:static xl:translate-x-0"

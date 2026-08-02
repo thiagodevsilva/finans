@@ -7,6 +7,7 @@ import TextInput from '@/Components/TextInput.vue';
 import { formatBRL, formatDate } from '@/utils/format';
 import { useAppTour } from '@/Composables/useAppTour';
 import { FIRST_SETUP_TOUR_ID } from '@/tours/firstSetup';
+import { PAYMENT_CARDS_TOUR_ID } from '@/tours/paymentCards';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
@@ -131,7 +132,13 @@ const payInvoiceHref = route('transactions.create', { type: 'transfer' });
 
 onMounted(async () => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('tour') === FIRST_SETUP_TOUR_ID) {
+    const tourParam = params.get('tour');
+    const needsForm = tourParam === FIRST_SETUP_TOUR_ID
+        || tourParam === PAYMENT_CARDS_TOUR_ID
+        || isTourActive(FIRST_SETUP_TOUR_ID)
+        || isTourActive(PAYMENT_CARDS_TOUR_ID);
+
+    if (needsForm) {
         openCreateForm();
         await nextTick();
     }
@@ -141,8 +148,13 @@ onMounted(async () => {
         return;
     }
 
-    if (params.get('tour') === FIRST_SETUP_TOUR_ID) {
+    if (tourParam === FIRST_SETUP_TOUR_ID) {
         startTour(FIRST_SETUP_TOUR_ID);
+        return;
+    }
+
+    if (tourParam === PAYMENT_CARDS_TOUR_ID) {
+        startTour(PAYMENT_CARDS_TOUR_ID);
     }
 });
 </script>

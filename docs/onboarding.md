@@ -14,17 +14,19 @@ Na UI do produto o termo é **Tutorial** (ex.: Refazer tutorial). Internamente o
 - Âncoras sempre via `data-tour="..."`, nunca classes CSS frágeis.
 - Progresso ativo: `sessionStorage` (`levita.tour.active`, `levita.tour.step`).
 - `first-setup` grava `users.onboarding_status` (`completed` / `skipped` / `null`).
-- Tours de tela (`dashboard`, `transactions`) **não** alteram `onboarding_status`.
-- Entrada por tela: botão **Ajuda** no header mobile do `AppLayout` (à direita do nome Levita); resolve o tour pela rota atual.
-- Reabrir tutorial Contas/Cartões: Sidebar / Perfil → **Refazer tutorial**.
+- Tours de tela (`dashboard`, `transactions`, `bank-accounts`, `payment-cards`) **não** alteram `onboarding_status`.
+- Entrada por tela: botão **Ajuda** no header mobile do `AppLayout` (à direita do nome Levita); resolve o tour pela rota atual via `pageTourByRoute`.
+- **Tutorial completo** (`first-setup`): só via Sidebar / Perfil → **Refazer tutorial** (ou modal de boas-vindas no primeiro acesso). **Nunca** via botão Ajuda.
 
 ## Tours disponíveis
 
-| id | Escopo | Demo | Persistência |
-|----|--------|------|--------------|
-| `first-setup` | Contas + Cartões (multipágina) | não | `onboarding_status` |
-| `dashboard` | Só Dashboard | sim | não |
-| `transactions` | Lista + formulário de transações | sim | não |
+| id | Escopo | Demo | Persistência | Entrada |
+|----|--------|------|--------------|---------|
+| `first-setup` | Contas + Cartões (multipágina) | não | `onboarding_status` | Refazer tutorial / boas-vindas |
+| `dashboard` | Só Dashboard | sim | não | Ajuda nesta tela |
+| `transactions` | Lista + formulário de transações | sim | não | Ajuda nesta tela |
+| `bank-accounts` | Só Contas | não | não | Ajuda nesta tela |
+| `payment-cards` | Só Cartões | não | não | Ajuda nesta tela |
 
 ---
 
@@ -91,10 +93,22 @@ Lista com exemplos; no form o tipo/pagamento são forçados pelo step (`onShow`)
 
 ---
 
+## Tour `bank-accounts`
+
+Mesmos pontos da etapa Contas do first-setup, sem navegar para Cartões. Ver `bankAccounts.js`.
+
+---
+
+## Tour `payment-cards`
+
+Mesmos pontos da etapa Cartões do first-setup, só nesta tela (abre o formulário). Ver `paymentCards.js`.
+
+---
+
 ## Padrão para novos tours
 
 1. Criar `resources/js/tours/<nome>.js` com `{ id, label, persistOnboarding, useDemo, steps }`.
-2. Registrar em `registry.js` (+ `pageTourByRoute` se houver Ajuda na tela).
+2. Registrar em `registry.js` (+ `pageTourByRoute` se houver Ajuda na tela). **Não** mapear `first-setup` em `pageTourByRoute`.
 3. Documentar aqui.
 4. Âncoras `data-tour` + `TourHelpButton` / `?tour=<id>` + `resumeIfActive`.
 5. Se `useDemo: true`, consumir `useTourDemo` na página.

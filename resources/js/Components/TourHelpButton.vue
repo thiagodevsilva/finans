@@ -16,15 +16,19 @@ const props = defineProps({
     },
 });
 
-const { startTour, isTourActive } = useAppTour();
+const { startPageTour, isTourActive, FIRST_SETUP_TOUR_ID } = useAppTour();
 
-const resolvedId = computed(() => props.tourId || resolvePageTourId());
+const resolvedId = computed(() => {
+    const id = props.tourId || resolvePageTourId();
+    // Ajuda nesta tela nunca dispara o tutorial completo
+    return id === FIRST_SETUP_TOUR_ID ? null : id;
+});
 
 const canShow = computed(() => Boolean(resolvedId.value) && !isTourActive());
 
 const start = () => {
     if (resolvedId.value) {
-        startTour(resolvedId.value);
+        startPageTour(resolvedId.value);
     }
 };
 </script>

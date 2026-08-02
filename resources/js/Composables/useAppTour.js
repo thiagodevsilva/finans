@@ -4,7 +4,7 @@ import Shepherd from 'shepherd.js';
 import { useTourDemo } from '@/Composables/useTourDemo';
 import { DASHBOARD_TOUR_ID } from '@/tours/dashboard';
 import { FIRST_SETUP_TOUR_ID } from '@/tours/firstSetup';
-import { getTour } from '@/tours/registry';
+import { getTour, resolvePageTourId } from '@/tours/registry';
 
 const STORAGE_ACTIVE = 'levita.tour.active';
 const STORAGE_STEP = 'levita.tour.step';
@@ -383,12 +383,13 @@ export function useAppTour() {
         });
     }
 
-    /** Inicia o tour da tela atual (ou um id explícito). */
+    /** Inicia o tour da tela atual (ou um id explícito). Nunca inicia first-setup. */
     function startPageTour(tourId = null) {
-        const id = tourId || sessionStorage.getItem(STORAGE_ACTIVE);
-        if (tourId) {
-            startTour(tourId);
+        const id = tourId || resolvePageTourId();
+        if (!id || id === FIRST_SETUP_TOUR_ID) {
+            return;
         }
+        startTour(id);
     }
 
     return {

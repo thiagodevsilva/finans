@@ -5,6 +5,7 @@ import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { useAppTour } from '@/Composables/useAppTour';
+import { BANK_ACCOUNTS_TOUR_ID } from '@/tours/bankAccounts';
 import { FIRST_SETUP_TOUR_ID } from '@/tours/firstSetup';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
@@ -23,8 +24,13 @@ onMounted(() => {
         return;
     }
     const params = new URLSearchParams(window.location.search);
-    if (params.get('tour') === FIRST_SETUP_TOUR_ID) {
+    const tourParam = params.get('tour');
+    if (tourParam === FIRST_SETUP_TOUR_ID) {
         startTour(FIRST_SETUP_TOUR_ID);
+        return;
+    }
+    if (tourParam === BANK_ACCOUNTS_TOUR_ID) {
+        startTour(BANK_ACCOUNTS_TOUR_ID);
     }
 });
 
