@@ -9,6 +9,7 @@ use App\Models\CreditCardInvoice;
 use App\Models\InstallmentPlan;
 use App\Models\PaymentCard;
 use App\Models\RecurringBill;
+use App\Models\SupportTicket;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Policies\BalanceAnchorPolicy;
@@ -19,6 +20,7 @@ use App\Policies\InstallmentPlanPolicy;
 use App\Policies\MemberPolicy;
 use App\Policies\PaymentCardPolicy;
 use App\Policies\RecurringBillPolicy;
+use App\Policies\SupportTicketPolicy;
 use App\Policies\TransactionPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
@@ -32,6 +34,7 @@ class AuthServiceProvider extends ServiceProvider
         InstallmentPlan::class => InstallmentPlanPolicy::class,
         PaymentCard::class => PaymentCardPolicy::class,
         RecurringBill::class => RecurringBillPolicy::class,
+        SupportTicket::class => SupportTicketPolicy::class,
         Transaction::class => TransactionPolicy::class,
         User::class => MemberPolicy::class,
     ];

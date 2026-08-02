@@ -21,6 +21,7 @@ const links = [
     { name: 'Categorias', route: 'categories.index', match: 'categories.*' },
     { name: 'Dependentes', route: 'members.index', match: 'members.*' },
     { name: 'Relatórios', route: 'reports.index', match: 'reports.*' },
+    { name: 'Suporte', route: 'support-tickets.index', match: 'support-tickets.*' },
 ];
 
 const isActive = (match) => route().current(match);

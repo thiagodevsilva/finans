@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\SupportTicket;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
@@ -26,5 +28,15 @@ class AppServiceProvider extends ServiceProvider
                 URL::forceRootUrl($root);
             }
         }
+
+        Route::bind('support_ticket', function (string $value) {
+            $query = SupportTicket::query();
+
+            if (auth()->user()?->isAdmin()) {
+                $query->withoutGlobalScope('account');
+            }
+
+            return $query->whereKey($value)->firstOrFail();
+        });
     }
 }

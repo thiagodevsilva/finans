@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminDashboardController;
+use App\Http\Controllers\AdminSupportTicketController;
 use App\Http\Controllers\BalanceAnchorController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\CategoryController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\PaymentCardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecurringBillController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -34,6 +36,7 @@ Route::get('/robots.txt', function () {
         'Disallow: /categories',
         'Disallow: /members',
         'Disallow: /reports',
+        'Disallow: /support',
         'Disallow: /profile',
         'Disallow: /admin',
         'Disallow: /login',
@@ -70,7 +73,17 @@ Route::get('/sitemap.xml', function () {
 Route::middleware(['auth', 'last.seen'])->group(function () {
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/', AdminDashboardController::class)->name('dashboard');
+
+        Route::get('/support', [AdminSupportTicketController::class, 'index'])->name('support-tickets.index');
+        Route::get('/support/{support_ticket}', [AdminSupportTicketController::class, 'show'])->name('support-tickets.show');
+        Route::patch('/support/{support_ticket}', [AdminSupportTicketController::class, 'update'])->name('support-tickets.update');
+        Route::post('/support/{support_ticket}/replies', [AdminSupportTicketController::class, 'storeReply'])->name('support-tickets.replies.store');
+        Route::post('/support/{support_ticket}/close', [AdminSupportTicketController::class, 'close'])->name('support-tickets.close');
     });
+
+    // Anexo acessível por família (mesma conta) ou admin
+    Route::get('/support/attachments/{attachment}', [SupportTicketController::class, 'showAttachment'])
+        ->name('support-tickets.attachments.show');
 
     Route::middleware('family')->group(function () {
         Route::get('/dashboard', DashboardController::class)->name('dashboard');
@@ -121,6 +134,13 @@ Route::middleware(['auth', 'last.seen'])->group(function () {
         Route::delete('/members/{member}', [MemberController::class, 'destroy'])->name('members.destroy');
 
         Route::get('/reports', ReportController::class)->name('reports.index');
+
+        Route::get('/support', [SupportTicketController::class, 'index'])->name('support-tickets.index');
+        Route::get('/support/create', [SupportTicketController::class, 'create'])->name('support-tickets.create');
+        Route::post('/support', [SupportTicketController::class, 'store'])->name('support-tickets.store');
+        Route::get('/support/{support_ticket}', [SupportTicketController::class, 'show'])->name('support-tickets.show');
+        Route::post('/support/{support_ticket}/replies', [SupportTicketController::class, 'storeReply'])->name('support-tickets.replies.store');
+        Route::post('/support/{support_ticket}/close', [SupportTicketController::class, 'close'])->name('support-tickets.close');
 
         Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
         Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

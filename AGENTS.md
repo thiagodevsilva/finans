@@ -27,18 +27,21 @@
 | InstallmentPlan | Compra parcelada (`installment_plans`) — gera N expenses |
 | RecurringBill | Conta fixa (`recurring_bills`) — gera lançamentos `planned` |
 | Transaction | `income`, `expense`, `transfer` (fatura) ou `investment` |
+| SupportTicket | Chamado de suporte (`support_tickets`) — título, descrição, anexos e conversa in-app; SLA 72h úteis |
 
 ## Estrutura
 
 ```
 app/Models/          Account, User, Category, BankAccount, BalanceAnchor, PaymentCard, CreditCardInvoice,
-                     InstallmentPlan, RecurringBill, Transaction
+                     InstallmentPlan, RecurringBill, Transaction, SupportTicket, SupportTicketAttachment,
+                     SupportTicketReply
 app/Services/        BalanceService, CreditCardInvoiceService, CreditCardPaymentService,
-                     InstallmentPlanService, RecurringBillService
+                     InstallmentPlanService, RecurringBillService, SupportSlaService
 app/Policies/        RBAC
 app/Http/Controllers/
 resources/js/Pages/  Landing, Dashboard, Transactions, Installments, RecurringBills,
-                     BankAccounts, PaymentCards, Categories, Members, Reports
+                     BankAccounts, PaymentCards, Categories, Members, Reports, SupportTickets,
+                     Admin/Dashboard, Admin/SupportTickets
 resources/js/Layouts/AppLayout.vue
 database/migrations/
 .cursor/rules/
@@ -47,7 +50,7 @@ database/migrations/
 
 ## Regras de ouro
 
-1. **Todo dado de negócio é isolado por `account_id`.** Nunca retornar registros de outra conta.
+1. **Todo dado de negócio é isolado por `account_id`.** Nunca retornar registros de outra conta. (Exceto painel admin `is_admin`, que vê SupportTickets globalmente.)
 2. Preferir trait/scope `BelongsToAccount` + Policies em vez de filtros ad hoc.
 3. Owner gerencia categorias, membros e **saldo de caixa** (âncoras); dependent edita/exclui só as próprias transações, cartões, contas, parcelas e contas fixas.
 4. UI em português; valores formatados em BRL.

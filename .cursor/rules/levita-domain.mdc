@@ -7,8 +7,9 @@ alwaysApply: true
 
 ## Isolamento
 
-- Toda query de Category, Transaction, PaymentCard, BankAccount, BalanceAnchor, CreditCardInvoice, InstallmentPlan, RecurringBill e listagem de User (membros) deve filtrar por `account_id` do usuário autenticado.
+- Toda query de Category, Transaction, PaymentCard, BankAccount, BalanceAnchor, CreditCardInvoice, InstallmentPlan, RecurringBill, SupportTicket e listagem de User (membros) deve filtrar por `account_id` do usuário autenticado.
 - Use o trait `BelongsToAccount` / global scope. Nunca confie só no ID da URL.
+- Admin (`is_admin`) vê todos os SupportTickets sem escopo de conta (painel `/admin/support`).
 
 ## Papéis
 
@@ -35,6 +36,11 @@ alwaysApply: true
 | Editar/excluir própria conta fixa | sim | sim |
 | Informar / atualizar saldo de caixa | sim | não (só visualizar) |
 | Adicionar/remover dependentes | sim | não |
+| Ver tickets de suporte da conta | sim | sim |
+| Abrir ticket / responder na thread | sim | sim |
+| Fechar próprio ticket (com justificativa) | sim | sim |
+| Fechar ticket de outro membro | sim | não |
+| Responder tickets no painel admin | só `is_admin` | só `is_admin` |
 
 ## Contabilidade
 
@@ -51,6 +57,14 @@ alwaysApply: true
 
 - Cadastro cria `Account` + `User` owner + categorias padrão na mesma transação DB.
 - Não permitir remover o último owner nem o próprio usuário se for o único owner.
+
+## Suporte
+
+- Ticket: título + descrição; até 5 imagens (≤ 6 MB cada) no disk `local` (privado).
+- Status: `open` → `in_progress` → `answered` → `closed`.
+- Fechamento exige justificativa (autor, owner da conta ou admin).
+- SLA: 72 horas úteis (seg–sex, sem feriados) até a primeira resposta do admin (`first_responded_at`).
+- Anexos só na abertura; download autenticado (mesma conta ou admin).
 
 ## Categorias padrão
 

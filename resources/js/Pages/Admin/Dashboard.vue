@@ -71,12 +71,18 @@ const logout = () => {
     <div class="min-h-screen bg-slate-50 text-navy-700">
         <header class="border-b border-horizon-100 bg-white">
             <div class="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
-                <div class="flex items-center gap-2">
-                    <AppMark :size="32" />
-                    <div>
-                        <p class="text-sm font-bold">Levita Admin</p>
-                        <p class="text-xs text-horizon-500">{{ user?.email }}</p>
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <AppMark :size="32" />
+                        <div>
+                            <p class="text-sm font-bold">Levita Admin</p>
+                            <p class="text-xs text-horizon-500">{{ user?.email }}</p>
+                        </div>
                     </div>
+                    <nav class="flex gap-3 text-sm">
+                        <Link :href="route('admin.dashboard')" class="font-semibold text-navy-700">Painel</Link>
+                        <Link :href="route('admin.support-tickets.index')" class="text-horizon-500 hover:text-navy-700">Suporte</Link>
+                    </nav>
                 </div>
                 <button type="button" class="text-sm font-medium text-cta hover:underline" @click="logout">
                     Sair
