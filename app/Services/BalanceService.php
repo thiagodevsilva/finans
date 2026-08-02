@@ -71,6 +71,31 @@ class BalanceService
         return $this->balanceFromAnchor($anchor, $at);
     }
 
+    /**
+     * Saldo de caixa para exibição: ajusta quando a âncora vigente ficou stale
+     * (lançamentos retroativos alterados depois do snapshot).
+     */
+    public function effectiveBalanceAt(?Carbon $at = null): ?float
+    {
+        $at = $at ? $at->copy() : now();
+
+        if ($this->needsInitialAnchor()) {
+            return null;
+        }
+
+        $anchor = $this->latestAnchor($at);
+
+        if (! $anchor) {
+            return null;
+        }
+
+        if ($this->staleCashAffectingQuery($anchor)->exists()) {
+            return $this->suggestedBalanceIgnoringLatestAnchor($at);
+        }
+
+        return $this->balanceAt($at);
+    }
+
     public function balanceFromAnchor(BalanceAnchor $anchor, Carbon $at): float
     {
         $from = $anchor->as_of_date->toDateString();
@@ -96,11 +121,7 @@ class BalanceService
     {
         $today = $today ? $today->copy() : now();
         $previousMonthEnd = $today->copy()->startOfMonth()->subDay()->endOfDay();
-        $amount = $this->balanceAt($previousMonthEnd);
-
-        if ($amount === null) {
-            $amount = 0.0;
-        }
+        $amount = $this->effectiveBalanceAt($previousMonthEnd) ?? 0.0;
 
         return $this->createAnchor(
             $owner,

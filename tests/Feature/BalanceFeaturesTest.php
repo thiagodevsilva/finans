@@ -439,4 +439,103 @@ class BalanceFeaturesTest extends TestCase
                 ->where('balanceMeta.needs_stale_recalc', false)
             );
     }
+
+    public function test_retroactive_income_updates_month_balance_when_viewing_past_month(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->travelTo('2026-07-01 12:00:00');
+
+        BalanceAnchor::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'amount' => 1000,
+            'as_of_date' => '2026-07-01',
+            'source' => BalanceAnchor::SOURCE_INITIAL,
+            'checkin_month' => '2026-07',
+        ]);
+
+        $this->travelTo('2026-08-01 09:00:00');
+
+        BalanceAnchor::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'amount' => 1000,
+            'as_of_date' => '2026-07-31',
+            'source' => BalanceAnchor::SOURCE_MONTHLY_KEEP,
+            'checkin_month' => '2026-08',
+        ]);
+
+        $this->travelTo('2026-08-05 10:00:00');
+
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_INCOME,
+            'amount' => 300,
+            'description' => 'Freela esquecido',
+            'date' => '2026-07-20',
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 7, 'year' => 2026]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('summary.income', 300)
+                ->where('summary.month_balance', 300)
+                ->where('summary.balance', 1300)
+            );
+
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 8, 'year' => 2026]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('summary.month_balance', 0)
+                ->where('balanceMeta.needs_stale_recalc', true)
+                ->where('balanceMeta.suggested_balance', 1300)
+                ->where('summary.balance', 1000)
+            );
+    }
+
+    public function test_effective_balance_at_uses_stale_adjustment_for_past_month_end(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->travelTo('2026-08-01 09:00:00');
+
+        BalanceAnchor::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'amount' => 1000,
+            'as_of_date' => '2026-07-31',
+            'source' => BalanceAnchor::SOURCE_MONTHLY_KEEP,
+            'checkin_month' => '2026-08',
+        ]);
+
+        $this->travelTo('2026-08-05 10:00:00');
+
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 150,
+            'description' => 'PIX esquecido',
+            'date' => '2026-07-20',
+            'payment_method' => Transaction::PAYMENT_PIX,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $balances = app(\App\Services\BalanceService::class);
+        $julyEnd = now()->copy()->startOfMonth()->subDay()->endOfDay();
+
+        $this->assertSame(1000.0, $balances->balanceAt($julyEnd));
+        $this->assertSame(850.0, $balances->effectiveBalanceAt($julyEnd));
+    }
 }
