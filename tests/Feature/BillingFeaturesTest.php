@@ -389,6 +389,60 @@ class BillingFeaturesTest extends TestCase
             ->assertInertia(fn ($page) => $page->where('summary.expense', 135.5));
     }
 
+    public function test_recurring_bills_index_groups_pending_and_paid_with_period_summary(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-bills.store'), [
+                'description' => 'Internet',
+                'category_id' => $category->id,
+                'estimated_amount' => 120,
+                'day_of_month' => 15,
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'start_date' => '2026-07-01',
+            ])
+            ->assertRedirect();
+
+        $bill = RecurringBill::withoutGlobalScopes()->first();
+        $this->assertNotNull($bill);
+
+        $augustPlanned = Transaction::withoutGlobalScopes()
+            ->where('recurring_bill_id', $bill->id)
+            ->where('status', Transaction::STATUS_PLANNED)
+            ->whereBetween('date', ['2026-08-01', '2026-08-31'])
+            ->first();
+
+        $this->assertNotNull($augustPlanned);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-transactions.confirm', $augustPlanned), [
+                'amount' => 125,
+                'date' => $augustPlanned->date->toDateString(),
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($owner)
+            ->get(route('recurring-bills.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('RecurringBills/Index')
+                ->has('paid', 1)
+                ->where('paid.0.amount', 125)
+                ->where('paid.0.status', Transaction::STATUS_CONFIRMED)
+                ->where('periodSummary.current.month', '2026-08')
+                ->where('periodSummary.current.paid_count', 1)
+                ->where('periodSummary.current.paid_amount', 125)
+                ->where('periodSummary.next.month', '2026-09')
+                ->where('periodSummary.next.pending_count', 1)
+                ->where('periodSummary.next.pending_amount', 120)
+            );
+    }
+
     public function test_expense_form_can_confirm_planned_recurring_bill(): void
     {
         $account = Account::factory()->create();

@@ -2,16 +2,26 @@
 import AppLayout from '@/Layouts/AppLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
+import Modal from '@/Components/Modal.vue';
 import MoneyInput from '@/Components/MoneyInput.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
-import { PAYMENT_METHODS, formatBRL, formatCardLabel, formatDate } from '@/utils/format';
+import { PAYMENT_METHODS, formatBRL, formatCardLabel, formatDate, MONTHS } from '@/utils/format';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     bills: Array,
-    upcoming: Array,
+    upcoming: { type: Array, default: () => [] },
+    paid: { type: Array, default: () => [] },
+    periodSummary: {
+        type: Object,
+        default: () => ({
+            current: { month: null, pending_count: 0, pending_amount: 0, paid_count: 0, paid_amount: 0 },
+            next: { month: null, pending_count: 0, pending_amount: 0, paid_count: 0, paid_amount: 0 },
+        }),
+    },
     categories: Array,
     paymentCards: Array,
     bankAccounts: Array,
@@ -57,6 +67,59 @@ watch(
     },
     { immediate: true },
 );
+
+const monthLabel = (ym) => {
+    if (!ym) return '';
+    const [year, month] = String(ym).split('-');
+    const found = MONTHS.find((m) => m.value === Number(month));
+    return found ? `${found.label} ${year}` : ym;
+};
+
+const scheduleByMonth = computed(() => {
+    const groups = new Map();
+
+    const ensure = (key) => {
+        if (!groups.has(key)) {
+            groups.set(key, {
+                key,
+                label: monthLabel(key),
+                pending: [],
+                paid: [],
+                pending_amount: 0,
+                paid_amount: 0,
+            });
+        }
+        return groups.get(key);
+    };
+
+    for (const item of props.upcoming) {
+        const key = String(item.date).slice(0, 7);
+        const group = ensure(key);
+        group.pending.push(item);
+        group.pending_amount += Number(item.amount || 0);
+    }
+
+    for (const item of props.paid) {
+        const key = String(item.date).slice(0, 7);
+        const group = ensure(key);
+        group.paid.push(item);
+        group.paid_amount += Number(item.amount || 0);
+    }
+
+    return Array.from(groups.values())
+        .map((g) => ({
+            ...g,
+            pending_amount: Math.round(g.pending_amount * 100) / 100,
+            paid_amount: Math.round(g.paid_amount * 100) / 100,
+            total_count: g.pending.length + g.paid.length,
+        }))
+        .sort((a, b) => a.key.localeCompare(b.key));
+});
+
+const hasSchedule = computed(() => scheduleByMonth.value.length > 0);
+
+const currentSummary = computed(() => props.periodSummary?.current ?? null);
+const nextSummary = computed(() => props.periodSummary?.next ?? null);
 
 const resetForm = () => {
     editing.value = null;
@@ -131,6 +194,11 @@ const openConfirm = (item) => {
     confirming.value = item;
     confirmForm.amount = item.amount;
     confirmForm.date = item.date;
+    confirmForm.clearErrors();
+};
+
+const closeConfirm = () => {
+    confirming.value = null;
     confirmForm.clearErrors();
 };
 
@@ -242,25 +310,6 @@ const skip = (item) => {
             </div>
         </form>
 
-        <div v-if="confirming" class="mb-8 max-w-md rounded-[20px] bg-white p-5 shadow-soft">
-            <h2 class="font-bold text-navy-700">Confirmar · {{ confirming.description }}</h2>
-            <form class="mt-4 space-y-3" @submit.prevent="submitConfirm">
-                <div>
-                    <InputLabel value="Valor real (R$)" />
-                    <MoneyInput class="mt-1" v-model="confirmForm.amount" required />
-                    <InputError class="mt-1" :message="confirmForm.errors.amount" />
-                </div>
-                <div>
-                    <InputLabel value="Data" />
-                    <TextInput type="date" class="mt-1 block w-full" v-model="confirmForm.date" />
-                </div>
-                <div class="flex gap-2">
-                    <PrimaryButton :disabled="confirmForm.processing">Confirmar pagamento</PrimaryButton>
-                    <button type="button" class="text-sm underline" @click="confirming = null">Cancelar</button>
-                </div>
-            </form>
-        </div>
-
         <section class="mb-6 sm:mb-8">
             <h2 class="mb-2 text-base font-bold text-navy-700 sm:mb-3 sm:text-lg">Cadastradas</h2>
             <div v-if="!bills.length" class="rounded-[20px] bg-white px-5 py-8 text-center text-sm text-horizon-500 shadow-soft">
@@ -299,30 +348,172 @@ const skip = (item) => {
             </div>
         </section>
 
-        <section>
-            <h2 class="mb-2 text-base font-bold text-navy-700 sm:mb-3 sm:text-lg">A pagar</h2>
-            <div v-if="!upcoming.length" class="rounded-[20px] bg-white px-5 py-8 text-center text-sm text-horizon-500 shadow-soft">
-                Nenhuma conta fixa prevista no horizonte.
+        <section data-tour="recurring-to-pay">
+            <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
+                <div>
+                    <h2 class="text-base font-bold text-navy-700 sm:text-lg">A pagar</h2>
+                    <p class="text-xs text-horizon-500 sm:text-sm">
+                        Previsto deste mês e dos próximos — gerado ao abrir a tela
+                    </p>
+                </div>
             </div>
-            <div v-else class="divide-y divide-horizon-100 overflow-hidden rounded-[16px] bg-white shadow-soft sm:space-y-3 sm:divide-y-0 sm:bg-transparent sm:shadow-none">
-                <article
-                    v-for="item in upcoming"
-                    :key="item.id"
-                    class="flex items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:rounded-[16px] sm:bg-white sm:px-4 sm:py-3 sm:shadow-soft"
-                >
-                    <div class="min-w-0 flex-1">
-                        <p class="truncate text-sm font-semibold text-navy-700">{{ item.description }}</p>
-                        <p class="truncate text-[11px] text-horizon-500 sm:text-xs">
-                            {{ formatDate(item.date) }} · {{ formatBRL(item.amount) }}
-                            <span class="hidden sm:inline"> · {{ item.category?.name }}</span>
+
+            <div
+                v-if="currentSummary || nextSummary"
+                class="mb-4 grid gap-3 sm:grid-cols-2"
+            >
+                <div class="rounded-[16px] bg-white px-4 py-3 shadow-soft">
+                    <p class="text-xs font-medium text-horizon-500">
+                        Este mês · {{ monthLabel(currentSummary?.month) }}
+                    </p>
+                    <div class="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <p class="text-sm text-navy-700">
+                            <span class="font-bold tabular-nums">{{ currentSummary?.pending_count ?? 0 }}</span>
+                            <span class="text-horizon-500"> a pagar</span>
+                            <span class="ml-1 font-semibold tabular-nums text-navy-700">{{ formatBRL(currentSummary?.pending_amount) }}</span>
+                        </p>
+                        <p class="text-sm text-emerald-700">
+                            <span class="font-bold tabular-nums">{{ currentSummary?.paid_count ?? 0 }}</span>
+                            <span class="text-horizon-500"> pagas</span>
+                            <span class="ml-1 font-semibold tabular-nums">{{ formatBRL(currentSummary?.paid_amount) }}</span>
                         </p>
                     </div>
-                    <div v-if="item.can_edit" class="flex shrink-0 gap-2 text-xs sm:gap-3 sm:text-sm">
-                        <button type="button" class="font-medium text-cta hover:underline" @click="openConfirm(item)">Confirmar</button>
-                        <button type="button" class="font-medium text-horizon-600 hover:underline" @click="skip(item)">Pular</button>
+                </div>
+                <div class="rounded-[16px] bg-white px-4 py-3 shadow-soft">
+                    <p class="text-xs font-medium text-horizon-500">
+                        Próximo mês · {{ monthLabel(nextSummary?.month) }}
+                    </p>
+                    <div class="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <p class="text-sm text-navy-700">
+                            <span class="font-bold tabular-nums">{{ nextSummary?.pending_count ?? 0 }}</span>
+                            <span class="text-horizon-500"> previstas</span>
+                            <span class="ml-1 font-semibold tabular-nums text-navy-700">{{ formatBRL(nextSummary?.pending_amount) }}</span>
+                        </p>
+                        <p v-if="(nextSummary?.paid_count ?? 0) > 0" class="text-sm text-emerald-700">
+                            <span class="font-bold tabular-nums">{{ nextSummary?.paid_count ?? 0 }}</span>
+                            <span class="text-horizon-500"> pagas</span>
+                            <span class="ml-1 font-semibold tabular-nums">{{ formatBRL(nextSummary?.paid_amount) }}</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="!hasSchedule" class="rounded-[20px] bg-white px-5 py-8 text-center text-sm text-horizon-500 shadow-soft">
+                Nenhuma conta fixa prevista no horizonte.
+            </div>
+
+            <div v-else class="space-y-4">
+                <article
+                    v-for="group in scheduleByMonth"
+                    :key="group.key"
+                    class="overflow-hidden rounded-[16px] bg-white shadow-soft"
+                >
+                    <header class="flex flex-wrap items-center justify-between gap-2 border-b border-horizon-100 px-4 py-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-navy-700 sm:text-base">{{ group.label }}</h3>
+                            <p class="text-[11px] text-horizon-500 sm:text-xs">
+                                {{ group.total_count }} conta{{ group.total_count === 1 ? '' : 's' }}
+                                <span v-if="group.pending.length">
+                                    · {{ group.pending.length }} a pagar ({{ formatBRL(group.pending_amount) }})
+                                </span>
+                                <span v-if="group.paid.length">
+                                    · {{ group.paid.length }} paga{{ group.paid.length === 1 ? '' : 's' }} ({{ formatBRL(group.paid_amount) }})
+                                </span>
+                            </p>
+                        </div>
+                        <p
+                            v-if="group.pending.length"
+                            class="shrink-0 text-sm font-bold tabular-nums text-navy-700"
+                        >
+                            {{ formatBRL(group.pending_amount) }}
+                        </p>
+                    </header>
+
+                    <div v-if="group.pending.length" class="divide-y divide-horizon-100">
+                        <div
+                            v-for="item in group.pending"
+                            :key="item.id"
+                            class="flex items-center justify-between gap-2 px-4 py-3"
+                        >
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-sm font-semibold text-navy-700">{{ item.description }}</p>
+                                <p class="truncate text-[11px] text-horizon-500 sm:text-xs">
+                                    Vence {{ formatDate(item.date) }} · {{ formatBRL(item.amount) }}
+                                    <span class="hidden sm:inline"> · {{ item.category?.name }}</span>
+                                </p>
+                            </div>
+                            <div v-if="item.can_edit" class="flex shrink-0 gap-2 text-xs sm:gap-3 sm:text-sm">
+                                <button
+                                    type="button"
+                                    class="rounded-lg bg-cta/10 px-2.5 py-1.5 font-semibold text-cta hover:bg-cta/15"
+                                    @click="openConfirm(item)"
+                                >
+                                    Confirmar
+                                </button>
+                                <button
+                                    type="button"
+                                    class="px-1 py-1.5 font-medium text-horizon-600 hover:underline"
+                                    @click="skip(item)"
+                                >
+                                    Pular
+                                </button>
+                            </div>
+                            <span v-else class="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                                Pendente
+                            </span>
+                        </div>
+                    </div>
+
+                    <div v-if="group.paid.length" :class="group.pending.length ? 'border-t border-horizon-100' : ''">
+                        <p class="bg-emerald-50/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                            Pagas · {{ group.paid.length }} · {{ formatBRL(group.paid_amount) }}
+                        </p>
+                        <div class="divide-y divide-horizon-100">
+                            <div
+                                v-for="item in group.paid"
+                                :key="item.id"
+                                class="flex items-center justify-between gap-2 px-4 py-2.5"
+                            >
+                                <div class="min-w-0 flex-1">
+                                    <p class="truncate text-sm font-medium text-navy-700">{{ item.description }}</p>
+                                    <p class="truncate text-[11px] text-horizon-500 sm:text-xs">
+                                        {{ formatDate(item.date) }} · {{ formatBRL(item.amount) }}
+                                        <span class="hidden sm:inline"> · {{ item.category?.name }}</span>
+                                    </p>
+                                </div>
+                                <span class="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                                    Paga
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </article>
             </div>
         </section>
+
+        <Modal :show="!!confirming" max-width="md" @close="closeConfirm">
+            <div class="p-5 sm:p-6">
+                <h2 class="text-lg font-bold text-navy-700">Confirmar pagamento</h2>
+                <p class="mt-1 text-sm text-horizon-600">
+                    {{ confirming?.description }} · previsto {{ formatBRL(confirming?.amount) }}
+                </p>
+                <form class="mt-5 space-y-4" @submit.prevent="submitConfirm">
+                    <div>
+                        <InputLabel value="Valor real (R$)" />
+                        <MoneyInput class="mt-1" v-model="confirmForm.amount" required />
+                        <InputError class="mt-1" :message="confirmForm.errors.amount" />
+                    </div>
+                    <div>
+                        <InputLabel value="Data do pagamento" />
+                        <TextInput type="date" class="mt-1 block w-full" v-model="confirmForm.date" required />
+                        <InputError class="mt-1" :message="confirmForm.errors.date" />
+                    </div>
+                    <div class="flex justify-end gap-2 pt-1">
+                        <SecondaryButton type="button" @click="closeConfirm">Cancelar</SecondaryButton>
+                        <PrimaryButton :disabled="confirmForm.processing">Confirmar pagamento</PrimaryButton>
+                    </div>
+                </form>
+            </div>
+        </Modal>
     </AppLayout>
 </template>

@@ -57,26 +57,90 @@ class RecurringBillController extends Controller
                 'can_edit' => $user->isOwner() || $bill->user_id === $user->id,
             ]);
 
+        $horizonStart = now()->startOfMonth()->toDateString();
+        $horizonEnd = now()->addMonthsNoOverflow(2)->endOfMonth()->toDateString();
+
+        $mapScheduleItem = fn (Transaction $tx) => [
+            'id' => $tx->id,
+            'description' => $tx->description,
+            'amount' => (float) $tx->amount,
+            'date' => $tx->date->toDateString(),
+            'status' => $tx->status,
+            'category' => $tx->category,
+            'recurring_bill_id' => $tx->recurring_bill_id,
+            'can_edit' => $user->isOwner() || $tx->user_id === $user->id,
+        ];
+
         $upcoming = Transaction::query()
             ->with(['category:id,name,color', 'recurringBill:id,description'])
             ->whereNotNull('recurring_bill_id')
             ->where('status', Transaction::STATUS_PLANNED)
-            ->whereBetween('date', [now()->startOfMonth()->toDateString(), now()->addMonthsNoOverflow(2)->endOfMonth()->toDateString()])
+            ->whereBetween('date', [$horizonStart, $horizonEnd])
             ->orderBy('date')
             ->get()
-            ->map(fn (Transaction $tx) => [
-                'id' => $tx->id,
-                'description' => $tx->description,
-                'amount' => (float) $tx->amount,
-                'date' => $tx->date->toDateString(),
-                'category' => $tx->category,
-                'recurring_bill_id' => $tx->recurring_bill_id,
-                'can_edit' => $user->isOwner() || $tx->user_id === $user->id,
-            ]);
+            ->map($mapScheduleItem);
+
+        $paid = Transaction::query()
+            ->with(['category:id,name,color', 'recurringBill:id,description'])
+            ->whereNotNull('recurring_bill_id')
+            ->where('status', Transaction::STATUS_CONFIRMED)
+            ->whereBetween('date', [$horizonStart, $horizonEnd])
+            ->orderByDesc('date')
+            ->get()
+            ->map($mapScheduleItem);
+
+        $monthKey = fn (string $date) => substr($date, 0, 7);
+
+        $sumByMonth = function ($items) use ($monthKey) {
+            $totals = [];
+            foreach ($items as $item) {
+                $key = $monthKey($item['date']);
+                $totals[$key] = ($totals[$key] ?? 0) + (float) $item['amount'];
+            }
+
+            return $totals;
+        };
+
+        $countByMonth = function ($items) use ($monthKey) {
+            $counts = [];
+            foreach ($items as $item) {
+                $key = $monthKey($item['date']);
+                $counts[$key] = ($counts[$key] ?? 0) + 1;
+            }
+
+            return $counts;
+        };
+
+        $upcomingAmounts = $sumByMonth($upcoming);
+        $paidAmounts = $sumByMonth($paid);
+        $upcomingCounts = $countByMonth($upcoming);
+        $paidCounts = $countByMonth($paid);
+
+        $currentMonth = now()->format('Y-m');
+        $nextMonth = now()->copy()->addMonthNoOverflow()->format('Y-m');
+
+        $periodSummary = [
+            'current' => [
+                'month' => $currentMonth,
+                'pending_count' => $upcomingCounts[$currentMonth] ?? 0,
+                'pending_amount' => round($upcomingAmounts[$currentMonth] ?? 0, 2),
+                'paid_count' => $paidCounts[$currentMonth] ?? 0,
+                'paid_amount' => round($paidAmounts[$currentMonth] ?? 0, 2),
+            ],
+            'next' => [
+                'month' => $nextMonth,
+                'pending_count' => $upcomingCounts[$nextMonth] ?? 0,
+                'pending_amount' => round($upcomingAmounts[$nextMonth] ?? 0, 2),
+                'paid_count' => $paidCounts[$nextMonth] ?? 0,
+                'paid_amount' => round($paidAmounts[$nextMonth] ?? 0, 2),
+            ],
+        ];
 
         return Inertia::render('RecurringBills/Index', [
             'bills' => $bills,
             'upcoming' => $upcoming,
+            'paid' => $paid,
+            'periodSummary' => $periodSummary,
             'categories' => Category::query()->orderBy('name')->get(['id', 'name', 'color']),
             'paymentCards' => PaymentCard::query()->orderBy('name')->get(['id', 'name', 'brand', 'type', 'last_four', 'color']),
             'bankAccounts' => BankAccount::query()->orderBy('name')->get(['id', 'name', 'color']),
