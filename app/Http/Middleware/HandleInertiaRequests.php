@@ -34,11 +34,13 @@ class HandleInertiaRequests extends Middleware
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
+                    'email_verified_at' => $user->email_verified_at?->toIso8601String(),
                     'role' => $user->role,
                     'is_owner' => $user->isOwner(),
                     'is_admin' => $user->isAdmin(),
                     'account_id' => $user->account_id,
                     'onboarding_status' => $user->onboarding_status,
+                    'marketing_emails_opted_in' => (bool) $user->marketing_emails_opted_in,
                 ] : null,
                 'account' => $user?->account ? [
                     'id' => $user->account->id,
@@ -48,6 +50,7 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                'status' => fn () => $request->session()->get('status'),
             ],
         ];
     }

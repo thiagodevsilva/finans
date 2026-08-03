@@ -6,6 +6,7 @@ use App\Http\Controllers\BalanceAnchorController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Email\UnsubscribeController;
 use App\Http\Controllers\InstallmentPlanController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\OnboardingController;
@@ -19,6 +20,10 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', fn () => Inertia::render('Landing'))->name('home');
+
+Route::get('/email/unsubscribe/{user}', UnsubscribeController::class)
+    ->middleware('signed')
+    ->name('email.unsubscribe');
 
 Route::get('/robots.txt', function () {
     $base = rtrim(url('/'), '/');

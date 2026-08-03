@@ -4,10 +4,11 @@ import SupportNoticeModal from '@/Components/SupportNoticeModal.vue';
 import TourHelpButton from '@/Components/TourHelpButton.vue';
 import { useAppTour } from '@/Composables/useAppTour';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { Link, usePage } from '@inertiajs/vue3';
+import { Link, useForm, usePage } from '@inertiajs/vue3';
 
 const SUPPORT_NOTICE_KEY = 'levita.support.notice.dismissed';
 const SUPPORT_NOTICE_SESSION_KEY = 'levita.support.notice.seen';
+const EMAIL_VERIFY_DISMISS_KEY = 'levita.email.verify.dismissed';
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
@@ -15,7 +16,13 @@ const account = computed(() => page.props.auth.account);
 const flash = computed(() => page.props.flash);
 const mobileOpen = ref(false);
 const showSupportNotice = ref(false);
+const emailBannerDismissed = ref(false);
+const verificationForm = useForm({});
 const { restartOnboarding, isTourActive } = useAppTour();
+
+const needsEmailVerification = computed(
+    () => Boolean(user.value) && !user.value.email_verified_at && !emailBannerDismissed.value,
+);
 
 const links = [
     { name: 'Dashboard', route: 'dashboard', match: 'dashboard' },
@@ -72,9 +79,27 @@ const dismissSupportNotice = ({ dontShowAgain }) => {
     }
 };
 
+const resendVerification = () => {
+    verificationForm.post(route('verification.send'));
+};
+
+const dismissEmailBanner = () => {
+    emailBannerDismissed.value = true;
+    try {
+        sessionStorage.setItem(EMAIL_VERIFY_DISMISS_KEY, '1');
+    } catch {
+        // storage indisponível
+    }
+};
+
 onMounted(() => {
     window.addEventListener('levita:tour-sidebar', onTourSidebar);
     showSupportNotice.value = shouldOfferSupportNotice();
+    try {
+        emailBannerDismissed.value = sessionStorage.getItem(EMAIL_VERIFY_DISMISS_KEY) === '1';
+    } catch {
+        emailBannerDismissed.value = false;
+    }
 });
 
 onUnmounted(() => {
@@ -163,6 +188,42 @@ onUnmounted(() => {
             </header>
 
             <main class="mx-auto w-full max-w-7xl flex-1 px-3 pb-8 pt-2 sm:px-6 lg:px-8 xl:pt-6">
+                <div
+                    v-if="needsEmailVerification"
+                    class="mb-4 flex flex-col gap-3 rounded-[16px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between"
+                    role="status"
+                >
+                    <div>
+                        <p class="font-semibold">Confirme seu e-mail</p>
+                        <p class="mt-0.5 text-amber-900/80">
+                            Enviamos um link para <span class="font-medium">{{ user.email }}</span>.
+                            A confirmação é recomendada, mas você já pode usar o Levita.
+                        </p>
+                    </div>
+                    <div class="flex shrink-0 items-center gap-2">
+                        <button
+                            type="button"
+                            class="rounded-xl bg-cta px-3 py-2 text-[0.875rem] font-semibold text-white hover:bg-cta-dark disabled:opacity-50"
+                            :disabled="verificationForm.processing"
+                            @click="resendVerification"
+                        >
+                            Reenviar
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-xl px-3 py-2 text-[0.875rem] font-medium text-amber-900/70 hover:text-amber-950"
+                            @click="dismissEmailBanner"
+                        >
+                            Agora não
+                        </button>
+                    </div>
+                </div>
+                <div
+                    v-if="flash?.status === 'verification-link-sent' || verificationForm.recentlySuccessful"
+                    class="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-[0.9625rem] text-emerald-800"
+                >
+                    Link de confirmação reenviado. Verifique sua caixa de entrada.
+                </div>
                 <div v-if="flash?.success" class="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-[0.9625rem] text-emerald-800">
                     {{ flash.success }}
                 </div>

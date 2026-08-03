@@ -2,6 +2,9 @@
 
 namespace App\Models;
 
+use App\Notifications\ResetPasswordNotification;
+use App\Notifications\VerifyEmailNotification;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +13,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     use HasApiTokens, HasFactory, HasUuids, Notifiable;
 
@@ -33,6 +36,7 @@ class User extends Authenticatable
         'is_admin',
         'last_seen_at',
         'onboarding_status',
+        'marketing_emails_opted_in',
     ];
 
     protected $hidden = [
@@ -45,10 +49,16 @@ class User extends Authenticatable
         'password' => 'hashed',
         'is_admin' => 'boolean',
         'last_seen_at' => 'datetime',
+        'marketing_emails_opted_in' => 'boolean',
+        'marketing_unsubscribed_at' => 'datetime',
     ];
 
     protected $appends = [
         'is_owner',
+    ];
+
+    protected $attributes = [
+        'marketing_emails_opted_in' => true,
     ];
 
     public function account(): BelongsTo
@@ -80,5 +90,28 @@ class User extends Authenticatable
     {
         return $this->last_seen_at !== null
             && $this->last_seen_at->gte(now()->subMinutes(self::ONLINE_MINUTES));
+    }
+
+    public function wantsMarketingEmails(): bool
+    {
+        return $this->marketing_emails_opted_in !== false;
+    }
+
+    public function unsubscribeFromMarketing(): void
+    {
+        $this->forceFill([
+            'marketing_emails_opted_in' => false,
+            'marketing_unsubscribed_at' => now(),
+        ])->save();
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new ResetPasswordNotification($token));
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new VerifyEmailNotification);
     }
 }

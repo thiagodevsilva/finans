@@ -29,13 +29,25 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
+        $data = $request->validated();
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        $user->fill([
+            'name' => $data['name'],
+            'email' => $data['email'],
+        ]);
+
+        if (array_key_exists('marketing_emails_opted_in', $data)) {
+            $optedIn = (bool) $data['marketing_emails_opted_in'];
+            $user->marketing_emails_opted_in = $optedIn;
+            $user->marketing_unsubscribed_at = $optedIn ? null : ($user->marketing_unsubscribed_at ?? now());
         }
 
-        $request->user()->save();
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
+        }
+
+        $user->save();
 
         return Redirect::route('profile.edit');
     }

@@ -26,8 +26,18 @@ class UserFactory extends Factory
             'role' => User::ROLE_OWNER,
             'is_admin' => false,
             'last_seen_at' => null,
+            'marketing_emails_opted_in' => true,
+            'marketing_unsubscribed_at' => null,
             'remember_token' => Str::random(10),
         ];
+    }
+
+    public function marketingOptedOut(): static
+    {
+        return $this->state(fn () => [
+            'marketing_emails_opted_in' => false,
+            'marketing_unsubscribed_at' => now(),
+        ]);
     }
 
     public function owner(): static
