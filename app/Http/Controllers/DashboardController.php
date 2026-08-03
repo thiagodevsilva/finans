@@ -98,8 +98,8 @@ class DashboardController extends Controller
             : $balances->effectiveBalanceAt($previousMonthEnd);
 
         $staleRecalc = $isCurrentMonth
-            ? $balances->staleRecalcMeta()
-            : ['needs_stale_recalc' => false, 'suggested_balance' => null];
+            ? $balances->staleRecalcMeta(null, $cashBalance)
+            : ['needs_stale_recalc' => false, 'suggested_balance' => null, 'stale_recalc_mode' => null];
 
         return Inertia::render('Dashboard', [
             'summary' => [
@@ -120,6 +120,7 @@ class DashboardController extends Controller
                 'previous_month_balance' => $previousMonthBalance,
                 'needs_stale_recalc' => $staleRecalc['needs_stale_recalc'],
                 'suggested_balance' => $staleRecalc['suggested_balance'],
+                'stale_recalc_mode' => $staleRecalc['stale_recalc_mode'] ?? null,
             ],
             'recurringSummary' => [
                 'paid_amount' => $paidAmount,

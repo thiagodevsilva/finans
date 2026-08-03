@@ -28,6 +28,7 @@ const props = defineProps({
             previous_month_balance: null,
             needs_stale_recalc: false,
             suggested_balance: null,
+            stale_recalc_mode: null,
         }),
     },
     recurringSummary: {
@@ -104,6 +105,30 @@ const monthBalanceHelp =
 
 const staleHelp =
     'Você lançou, alterou ou excluiu movimentações com data anterior à referência do saldo atual. A sugestão parte do saldo do fim do mês anterior e soma as movimentações de caixa deste mês.';
+
+const staleBannerTitle = computed(() => {
+    if (balanceMeta.value.stale_recalc_mode === 'confirm') {
+        return 'Confirme a referência do saldo de caixa';
+    }
+
+    return 'Lançamentos anteriores à data de referência do saldo foram alterados ou excluídos';
+});
+
+const staleBannerBody = computed(() => {
+    if (!isOwner.value) {
+        return 'Peça ao responsável da conta para atualizar a referência do saldo de caixa.';
+    }
+
+    if (balanceMeta.value.stale_recalc_mode === 'confirm') {
+        return 'O saldo exibido já está correto. Confirme a referência para gravar esse valor e evitar avisos futuros.';
+    }
+
+    return 'O saldo exibido ainda não reflete a referência salva. Revise o valor sugerido antes de confirmar.';
+});
+
+const staleBannerAction = computed(() =>
+    balanceMeta.value.stale_recalc_mode === 'confirm' ? 'Confirmar referência' : 'Recalcular',
+);
 
 const openUpdateBalance = (suggested = null) => {
     balanceSuggestedAmount.value = suggested;
@@ -231,16 +256,11 @@ onMounted(() => {
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
                     <p class="text-sm font-semibold text-navy-700">
-                        Lançamentos anteriores à data de referência do saldo foram alterados ou excluídos
+                        {{ staleBannerTitle }}
                         <HelpTip class="ml-1" :text="staleHelp" label="Sobre recalcular o saldo" />
                     </p>
                     <p class="mt-1 text-xs text-horizon-600">
-                        <template v-if="isOwner">
-                            Deseja recalcular o saldo atual a partir do mês anterior? Você poderá revisar o valor sugerido antes de salvar.
-                        </template>
-                        <template v-else>
-                            Peça ao responsável da conta para recalcular o saldo de caixa.
-                        </template>
+                        {{ staleBannerBody }}
                     </p>
                     <p
                         v-if="isOwner && balanceMeta.suggested_balance != null"
@@ -257,7 +277,7 @@ onMounted(() => {
                         Agora não
                     </SecondaryButton>
                     <PrimaryButton class="!px-3 !py-1.5 text-xs" type="button" @click="openStaleRecalc">
-                        Recalcular
+                        {{ staleBannerAction }}
                     </PrimaryButton>
                 </div>
             </div>

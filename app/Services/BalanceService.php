@@ -276,32 +276,70 @@ class BalanceService
     /**
      * Meta para o dashboard: precisa recalcular? Qual valor sugerir?
      *
-     * @return array{needs_stale_recalc: bool, suggested_balance: float|null}
+     * @return array{
+     *     needs_stale_recalc: bool,
+     *     suggested_balance: float|null,
+     *     stale_recalc_mode: 'update'|'confirm'|null
+     * }
      */
-    public function staleRecalcMeta(?Carbon $at = null): array
+    public function staleRecalcMeta(?Carbon $at = null, ?float $displayedBalance = null): array
     {
         $at = $at ? $at->copy() : now();
         $anchor = $this->latestAnchor($at);
 
         if (! $anchor || $this->needsMonthlyCheckin($at)) {
-            return ['needs_stale_recalc' => false, 'suggested_balance' => null];
+            return [
+                'needs_stale_recalc' => false,
+                'suggested_balance' => null,
+                'stale_recalc_mode' => null,
+            ];
         }
 
         if (! $this->isAnchorStale($anchor)) {
-            return ['needs_stale_recalc' => false, 'suggested_balance' => null];
+            return [
+                'needs_stale_recalc' => false,
+                'suggested_balance' => null,
+                'stale_recalc_mode' => null,
+            ];
         }
 
-        $dismissedAt = session(self::SESSION_STALE_DISMISSED_AT);
-        if ($dismissedAt) {
-            $latestStaleMoment = $this->latestStaleMoment($anchor);
-            if ($latestStaleMoment && $latestStaleMoment->lte(Carbon::parse($dismissedAt))) {
-                return ['needs_stale_recalc' => false, 'suggested_balance' => null];
-            }
+        $suggested = $this->suggestedBalanceIgnoringLatestAnchor($at);
+        $displayed = $displayedBalance ?? $this->effectiveBalanceAt($at);
+        $snapshot = $this->balanceAt($at);
+
+        if ($suggested === null) {
+            return [
+                'needs_stale_recalc' => false,
+                'suggested_balance' => null,
+                'stale_recalc_mode' => null,
+            ];
         }
+
+        // Saldo na tela já reflete a sugestão — não alarmar (ex.: após retroativos já corrigidos na exibição).
+        if ($displayed !== null && $this->amountsClose($displayed, $suggested)) {
+            return [
+                'needs_stale_recalc' => false,
+                'suggested_balance' => $suggested,
+                'stale_recalc_mode' => null,
+            ];
+        }
+
+        if ($this->isStaleDismissed($anchor)) {
+            return [
+                'needs_stale_recalc' => false,
+                'suggested_balance' => $suggested,
+                'stale_recalc_mode' => null,
+            ];
+        }
+
+        $mode = $snapshot !== null && $this->amountsClose($snapshot, $suggested)
+            ? 'update'
+            : 'confirm';
 
         return [
             'needs_stale_recalc' => true,
-            'suggested_balance' => $this->suggestedBalanceIgnoringLatestAnchor($at),
+            'suggested_balance' => $suggested,
+            'stale_recalc_mode' => $mode,
         ];
     }
 
@@ -332,7 +370,14 @@ class BalanceService
 
     public function dismissStaleRecalc(): void
     {
-        session([self::SESSION_STALE_DISMISSED_AT => now()->toIso8601String()]);
+        $now = now();
+        session([self::SESSION_STALE_DISMISSED_AT => $now->toIso8601String()]);
+
+        $account = $this->currentAccount();
+        if ($account) {
+            $account->balance_stale_dismissed_at = $now;
+            $account->save();
+        }
     }
 
     /**
@@ -468,7 +513,47 @@ class BalanceService
         Account::query()->whereKey($accountId)->update([
             'balance_stale_at' => null,
             'balance_stale_adjustment' => 0,
+            'balance_stale_dismissed_at' => null,
         ]);
+    }
+
+    protected function isStaleDismissed(BalanceAnchor $anchor): bool
+    {
+        $latestStaleMoment = $this->latestStaleMoment($anchor);
+        if (! $latestStaleMoment) {
+            return false;
+        }
+
+        $dismissedMoments = [];
+
+        $sessionDismissed = session(self::SESSION_STALE_DISMISSED_AT);
+        if ($sessionDismissed) {
+            $dismissedMoments[] = Carbon::parse($sessionDismissed);
+        }
+
+        $account = $this->currentAccount();
+        if ($account?->balance_stale_dismissed_at) {
+            $dismissedMoments[] = $account->balance_stale_dismissed_at->copy();
+        }
+
+        if ($dismissedMoments === []) {
+            return false;
+        }
+
+        $lastDismissed = collect($dismissedMoments)
+            ->sortByDesc(fn (Carbon $moment) => $moment->timestamp)
+            ->first();
+
+        return $lastDismissed->gte($latestStaleMoment);
+    }
+
+    protected function amountsClose(?float $a, ?float $b): bool
+    {
+        if ($a === null || $b === null) {
+            return false;
+        }
+
+        return abs($a - $b) < 0.01;
     }
 
     protected function createAnchor(

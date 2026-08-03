@@ -423,14 +423,22 @@ class BalanceFeaturesTest extends TestCase
             ->get(route('dashboard'))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->where('balanceMeta.needs_stale_recalc', true)
+                ->where('balanceMeta.needs_stale_recalc', false)
                 ->where('balanceMeta.suggested_balance', 850)
                 ->where('summary.balance', 850)
             );
 
+        $balances = app(\App\Services\BalanceService::class);
+        $meta = $balances->staleRecalcMeta(now(), 1000.0);
+        $this->assertTrue($meta['needs_stale_recalc']);
+        $this->assertSame(850.0, $meta['suggested_balance']);
+
         $this->actingAs($owner)
             ->post(route('balance-anchors.dismiss-stale'))
             ->assertRedirect();
+
+        $account = \App\Models\Account::query()->find($account->id);
+        $this->assertNotNull($account->balance_stale_dismissed_at);
 
         $this->actingAs($owner)
             ->get(route('dashboard'))
@@ -438,6 +446,9 @@ class BalanceFeaturesTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('balanceMeta.needs_stale_recalc', false)
             );
+
+        $metaAfterDismiss = $balances->staleRecalcMeta(now(), 1000.0);
+        $this->assertFalse($metaAfterDismiss['needs_stale_recalc']);
     }
 
     public function test_retroactive_income_updates_month_balance_when_viewing_past_month(): void
@@ -495,7 +506,7 @@ class BalanceFeaturesTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('summary.month_balance', 0)
-                ->where('balanceMeta.needs_stale_recalc', true)
+                ->where('balanceMeta.needs_stale_recalc', false)
                 ->where('balanceMeta.suggested_balance', 1300)
                 ->where('summary.balance', 1300)
             );
@@ -594,7 +605,7 @@ class BalanceFeaturesTest extends TestCase
             ->get(route('dashboard', ['month' => 8, 'year' => 2026]))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->where('balanceMeta.needs_stale_recalc', true)
+                ->where('balanceMeta.needs_stale_recalc', false)
                 ->where('balanceMeta.suggested_balance', 26790.71)
                 ->where('summary.balance', 26790.71)
             );
@@ -657,7 +668,7 @@ class BalanceFeaturesTest extends TestCase
             ->get(route('dashboard', ['month' => 8, 'year' => 2026]))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->where('balanceMeta.needs_stale_recalc', true)
+                ->where('balanceMeta.needs_stale_recalc', false)
                 ->where('balanceMeta.suggested_balance', 26890.71)
                 ->where('summary.balance', 26890.71)
             );
@@ -668,5 +679,51 @@ class BalanceFeaturesTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('summary.balance', 26890.71)
             );
+    }
+
+    public function test_stale_dismiss_on_account_survives_new_session(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->travelTo('2026-08-01 09:00:00');
+
+        BalanceAnchor::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'amount' => 1000,
+            'as_of_date' => '2026-07-31',
+            'source' => BalanceAnchor::SOURCE_MONTHLY_KEEP,
+            'checkin_month' => '2026-08',
+        ]);
+
+        $this->travelTo('2026-08-05 10:00:00');
+
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 150,
+            'description' => 'PIX esquecido',
+            'date' => '2026-07-20',
+            'payment_method' => Transaction::PAYMENT_PIX,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('balance-anchors.dismiss-stale'))
+            ->assertRedirect();
+
+        $account->refresh();
+        $this->assertNotNull($account->balance_stale_dismissed_at);
+
+        $this->flushSession();
+
+        $balances = app(\App\Services\BalanceService::class);
+        $this->actingAs($owner);
+        $meta = $balances->staleRecalcMeta(now(), 1000.0);
+        $this->assertFalse($meta['needs_stale_recalc']);
     }
 }

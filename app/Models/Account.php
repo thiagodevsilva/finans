@@ -15,11 +15,13 @@ class Account extends Model
         'name',
         'balance_stale_at',
         'balance_stale_adjustment',
+        'balance_stale_dismissed_at',
     ];
 
     protected $casts = [
         'balance_stale_at' => 'datetime',
         'balance_stale_adjustment' => 'decimal:2',
+        'balance_stale_dismissed_at' => 'datetime',
     ];
 
     public function users(): HasMany
