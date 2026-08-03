@@ -63,6 +63,20 @@ const applyDays = (event) => {
 const logout = () => {
     router.post(route('logout'));
 };
+
+const formatLastSeen = (value) => {
+    if (!value) {
+        return 'Nunca';
+    }
+
+    return new Date(value).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+};
 </script>
 
 <template>
@@ -138,6 +152,7 @@ const logout = () => {
                                 <th class="px-2 py-2 font-semibold">Nome</th>
                                 <th class="px-2 py-2 font-semibold">E-mail</th>
                                 <th class="px-2 py-2 font-semibold">Família</th>
+                                <th class="px-2 py-2 font-semibold">Última vez online</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -150,6 +165,14 @@ const logout = () => {
                                 <td class="px-2 py-2.5 text-horizon-600">{{ row.email }}</td>
                                 <td class="px-2 py-2.5 text-horizon-600">
                                     {{ row.family_name || '—' }}
+                                </td>
+                                <td class="px-2 py-2.5 whitespace-nowrap text-horizon-600">
+                                    <span
+                                        v-if="row.is_online"
+                                        class="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle"
+                                        title="Online agora"
+                                    />
+                                    {{ formatLastSeen(row.last_seen_at) }}
                                 </td>
                             </tr>
                         </tbody>

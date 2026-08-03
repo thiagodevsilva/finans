@@ -295,10 +295,12 @@ class ContasCartoesAdminTest extends TestCase
     {
         $admin = User::factory()->admin()->create();
         $account = Account::factory()->create(['name' => 'Família Silva']);
+        $lastSeen = now()->subMinutes(10);
         User::factory()->owner()->create([
             'account_id' => $account->id,
             'name' => 'João Silva',
             'email' => 'joao@example.com',
+            'last_seen_at' => $lastSeen,
         ]);
 
         $this->actingAs($admin)
@@ -309,6 +311,8 @@ class ContasCartoesAdminTest extends TestCase
                 ->where('users.data.0.name', 'João Silva')
                 ->where('users.data.0.email', 'joao@example.com')
                 ->where('users.data.0.family_name', 'Família Silva')
+                ->where('users.data.0.is_online', true)
+                ->where('users.data.0.last_seen_at', $lastSeen->toIso8601String())
             );
     }
 

@@ -48,6 +48,8 @@ class AdminDashboardController extends Controller
                 'role' => $user->role,
                 'family_name' => $user->account?->name,
                 'created_at' => $user->created_at?->toDateString(),
+                'last_seen_at' => $user->last_seen_at?->toIso8601String(),
+                'is_online' => $user->isOnline(),
             ]);
 
         return Inertia::render('Admin/Dashboard', [
