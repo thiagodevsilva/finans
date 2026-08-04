@@ -119,13 +119,22 @@ class RecurringBillController extends Controller
         $currentMonth = now()->format('Y-m');
         $nextMonth = now()->copy()->addMonthNoOverflow()->format('Y-m');
 
+        $currentPendingAmount = round($upcomingAmounts[$currentMonth] ?? 0, 2);
+        $currentPaidAmount = round($paidAmounts[$currentMonth] ?? 0, 2);
+        $currentTotalAmount = round($currentPendingAmount + $currentPaidAmount, 2);
+        $currentPaidPercent = $currentTotalAmount > 0
+            ? (int) round(($currentPaidAmount / $currentTotalAmount) * 100)
+            : 0;
+
         $periodSummary = [
             'current' => [
                 'month' => $currentMonth,
                 'pending_count' => $upcomingCounts[$currentMonth] ?? 0,
-                'pending_amount' => round($upcomingAmounts[$currentMonth] ?? 0, 2),
+                'pending_amount' => $currentPendingAmount,
                 'paid_count' => $paidCounts[$currentMonth] ?? 0,
-                'paid_amount' => round($paidAmounts[$currentMonth] ?? 0, 2),
+                'paid_amount' => $currentPaidAmount,
+                'total_amount' => $currentTotalAmount,
+                'paid_percent' => $currentPaidPercent,
             ],
             'next' => [
                 'month' => $nextMonth,
