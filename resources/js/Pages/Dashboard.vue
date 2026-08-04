@@ -305,6 +305,14 @@ onMounted(() => {
                                 {{ formatBRL(summary.month_balance) }}
                             </span>
                         </p>
+                        <SecondaryButton
+                            v-if="isOwner && !showingDemo"
+                            class="mt-2 !px-2.5 !py-1 text-xs sm:hidden"
+                            type="button"
+                            @click="openUpdateBalance()"
+                        >
+                            Atualizar saldo
+                        </SecondaryButton>
                     </div>
                     <div class="shrink-0 text-right">
                         <SecondaryButton
@@ -340,14 +348,6 @@ onMounted(() => {
                         </div>
                     </div>
                 </div>
-                <SecondaryButton
-                    v-if="isOwner && !showingDemo"
-                    class="mt-3 w-full !px-3 !py-1.5 text-xs sm:hidden"
-                    type="button"
-                    @click="openUpdateBalance()"
-                >
-                    Atualizar saldo
-                </SecondaryButton>
             </div>
         </div>
 
