@@ -285,11 +285,11 @@ onMounted(() => {
 
         <div data-tour="dash-stats" class="mb-4 sm:mb-6">
             <div class="rounded-[16px] bg-white px-4 py-4 shadow-soft sm:px-6 sm:py-5">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div class="min-w-0">
+                <div class="flex flex-nowrap items-start justify-between gap-2 sm:gap-3">
+                    <div class="min-w-0 flex-1">
                         <p class="text-sm font-medium text-horizon-500">Saldo</p>
                         <p
-                            class="mt-1 text-2xl font-bold tabular-nums tracking-tight sm:text-3xl lg:text-4xl"
+                            class="mt-1 text-lg font-bold tabular-nums leading-tight tracking-tight sm:text-3xl lg:text-4xl"
                             :class="balanceToneClass"
                             data-tour="dash-balance"
                         >
@@ -306,31 +306,33 @@ onMounted(() => {
                             </span>
                         </p>
                     </div>
-                    <div class="flex w-full flex-col gap-2 sm:w-auto sm:shrink-0 sm:items-end sm:text-right">
+                    <div class="shrink-0 text-right">
                         <SecondaryButton
                             v-if="isOwner && !showingDemo"
-                            class="w-full !px-3 !py-1.5 text-xs sm:w-auto sm:text-sm"
+                            class="mb-2 hidden !px-2 !py-1 text-xs sm:inline-flex sm:!px-3 sm:!py-1.5 sm:text-sm"
                             type="button"
                             data-tour="dash-balance-update"
                             @click="openUpdateBalance()"
                         >
                             Atualizar saldo
                         </SecondaryButton>
-                        <div class="space-y-1 text-left sm:text-right">
-                            <p class="text-sm text-horizon-500">
+                        <div class="space-y-0.5 sm:space-y-1">
+                            <p class="text-xs text-horizon-500 sm:text-sm">
                                 Entradas
                                 <span class="ml-1 font-semibold tabular-nums text-emerald-600">
                                     {{ formatBRL(summary.income) }}
                                 </span>
                             </p>
-                            <p class="text-sm text-horizon-500">
-                                Gastos no crédito
+                            <p class="text-xs text-horizon-500 sm:text-sm">
+                                <span class="sm:hidden">Crédito</span>
+                                <span class="hidden sm:inline">Gastos no crédito</span>
                                 <span class="ml-1 font-semibold tabular-nums text-red-600">
                                     {{ formatBRL(summary.expense_credit) }}
                                 </span>
                             </p>
-                            <p class="text-sm text-horizon-500">
-                                Gastos no débito
+                            <p class="text-xs text-horizon-500 sm:text-sm">
+                                <span class="sm:hidden">Débito</span>
+                                <span class="hidden sm:inline">Gastos no débito</span>
                                 <span class="ml-1 font-semibold tabular-nums text-red-600">
                                     {{ formatBRL(summary.expense_debit) }}
                                 </span>
@@ -338,6 +340,14 @@ onMounted(() => {
                         </div>
                     </div>
                 </div>
+                <SecondaryButton
+                    v-if="isOwner && !showingDemo"
+                    class="mt-3 w-full !px-3 !py-1.5 text-xs sm:hidden"
+                    type="button"
+                    @click="openUpdateBalance()"
+                >
+                    Atualizar saldo
+                </SecondaryButton>
             </div>
         </div>
 
