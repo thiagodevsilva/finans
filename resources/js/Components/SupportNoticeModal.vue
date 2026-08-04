@@ -45,20 +45,20 @@ const dismiss = () => {
                     >
                     <span>Não exibir novamente</span>
                 </label>
-                <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <div class="mt-6 flex flex-row flex-wrap items-center justify-end gap-2">
                     <button
                         type="button"
-                        class="rounded-xl px-4 py-2.5 text-sm font-semibold text-horizon-600 hover:bg-horizon-100"
+                        class="rounded-xl px-3 py-2 text-sm font-semibold text-horizon-600 hover:bg-horizon-100 sm:px-4 sm:py-2.5"
                         @click="dismiss"
                     >
                         Entendi
                     </button>
                     <Link
                         :href="route('support-tickets.index')"
-                        class="inline-flex"
+                        class="inline-flex shrink-0"
                         @click="dismiss"
                     >
-                        <PrimaryButton type="button">
+                        <PrimaryButton class="!px-3 !py-2 text-sm sm:!px-4 sm:!py-2.5" type="button">
                             Ver suporte
                         </PrimaryButton>
                     </Link>

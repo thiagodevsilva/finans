@@ -228,14 +228,14 @@ onMounted(() => {
     <AppLayout>
         <TourDemoBanner :show="showingDemo" />
 
-        <div class="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-6 sm:gap-4" data-tour="dash-page">
-            <div class="min-w-0">
-                <h1 class="text-lg font-bold text-navy-700 sm:text-2xl">Dashboard</h1>
+        <div class="mb-3 flex flex-nowrap items-center justify-between gap-2 sm:mb-6 sm:gap-4" data-tour="dash-page">
+            <div class="min-w-0 shrink">
+                <h1 class="truncate text-base font-bold text-navy-700 sm:text-2xl">Dashboard</h1>
                 <p class="hidden text-sm text-horizon-500 sm:block">Resumo do mês selecionado</p>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <form class="flex gap-2" data-tour="dash-period" @change="applyFilters">
-                    <select name="month" class="rounded-xl border-horizon-200 py-1.5 text-xs text-navy-700 sm:text-sm" :value="filters.month">
+            <div class="flex shrink-0 flex-nowrap items-center gap-1.5 sm:gap-2">
+                <form class="flex shrink-0 gap-1.5 sm:gap-2" data-tour="dash-period" @change="applyFilters">
+                    <select name="month" class="max-w-[5.5rem] rounded-xl border-horizon-200 py-1.5 text-xs text-navy-700 sm:max-w-none sm:text-sm" :value="filters.month">
                         <option v-for="m in MONTHS" :key="m.value" :value="m.value">{{ m.label }}</option>
                     </select>
                     <select name="year" class="rounded-xl border-horizon-200 py-1.5 text-xs text-navy-700 sm:text-sm" :value="filters.year">
@@ -285,17 +285,17 @@ onMounted(() => {
 
         <div data-tour="dash-stats" class="mb-4 sm:mb-6">
             <div class="rounded-[16px] bg-white px-4 py-4 shadow-soft sm:px-6 sm:py-5">
-                <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div class="min-w-0">
                         <p class="text-sm font-medium text-horizon-500">Saldo</p>
                         <p
-                            class="mt-1 text-3xl font-bold tabular-nums tracking-tight sm:text-4xl"
+                            class="mt-1 text-2xl font-bold tabular-nums tracking-tight sm:text-3xl lg:text-4xl"
                             :class="balanceToneClass"
                             data-tour="dash-balance"
                         >
                             {{ balanceDisplay }}
                         </p>
-                        <p class="mt-2 text-sm text-horizon-500">
+                        <p class="mt-2 text-xs text-horizon-500 sm:text-sm">
                             Saldo do mês
                             <HelpTip class="ml-1" :text="monthBalanceHelp" label="Sobre o saldo do mês" />
                             <span
@@ -306,17 +306,17 @@ onMounted(() => {
                             </span>
                         </p>
                     </div>
-                    <div class="flex shrink-0 flex-col items-end gap-2 text-right">
+                    <div class="flex w-full flex-col gap-2 sm:w-auto sm:shrink-0 sm:items-end sm:text-right">
                         <SecondaryButton
                             v-if="isOwner && !showingDemo"
-                            class="!px-3 !py-1.5 text-xs sm:text-sm"
+                            class="w-full !px-3 !py-1.5 text-xs sm:w-auto sm:text-sm"
                             type="button"
                             data-tour="dash-balance-update"
                             @click="openUpdateBalance()"
                         >
                             Atualizar saldo
                         </SecondaryButton>
-                        <div class="space-y-1">
+                        <div class="space-y-1 text-left sm:text-right">
                             <p class="text-sm text-horizon-500">
                                 Entradas
                                 <span class="ml-1 font-semibold tabular-nums text-emerald-600">
