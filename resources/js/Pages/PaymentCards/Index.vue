@@ -341,7 +341,15 @@ onMounted(async () => {
                             <span v-if="payment.bank_account"> · {{ payment.bank_account.name }}</span>
                         </p>
                     </div>
-                    <p class="shrink-0 font-bold tabular-nums text-navy-700">{{ formatBRL(payment.amount) }}</p>
+                    <div class="flex shrink-0 items-center gap-3">
+                        <p class="font-bold tabular-nums text-navy-700">{{ formatBRL(payment.amount) }}</p>
+                        <Link
+                            :href="route('transactions.edit', payment.id)"
+                            class="text-xs font-semibold text-cta hover:underline"
+                        >
+                            Editar
+                        </Link>
+                    </div>
                 </li>
             </ul>
         </section>

@@ -564,4 +564,220 @@ class BillingFeaturesTest extends TestCase
             ])
             ->assertNotFound();
     }
+
+    public function test_transfer_payment_follows_closing_cycle_not_oldest_unpaid(): void
+    {
+        $this->travelTo('2026-08-16 12:00:00');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+        $bank = BankAccount::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'Mercado Pago',
+            'color' => '#00a0e3',
+        ]);
+        $card = PaymentCard::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'Mercado Pago',
+            'brand' => 'mastercard',
+            'type' => 'credit',
+            'color' => '#00a0e3',
+            'closing_day' => 15,
+            'due_day' => 20,
+        ]);
+
+        // Fatura de julho ainda aberta com saldo — o bug antigo jogava o pagamento nela.
+        $julyInvoice = CreditCardInvoice::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'payment_card_id' => $card->id,
+            'closing_date' => '2026-07-15',
+            'due_date' => '2026-07-20',
+            'status' => CreditCardInvoice::STATUS_CLOSED,
+            'paid_amount' => 0,
+        ]);
+
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 5000,
+            'description' => 'Compra julho',
+            'date' => '2026-07-10',
+            'payment_method' => Transaction::PAYMENT_CARD,
+            'payment_card_id' => $card->id,
+            'credit_card_invoice_id' => $julyInvoice->id,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $suggested = app(\App\Services\CreditCardInvoiceService::class)
+            ->suggestInvoiceForPayment($card, '2026-08-16');
+
+        // Usuário pode escolher a fatura de julho mesmo com sugestão de setembro.
+        $this->actingAs($owner)
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_TRANSFER,
+                'amount' => 1000,
+                'date' => '2026-08-16',
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'payment_card_id' => $card->id,
+                'bank_account_id' => $bank->id,
+                'credit_card_invoice_id' => $julyInvoice->id,
+            ])
+            ->assertRedirect();
+
+        $payment = Transaction::withoutGlobalScopes()
+            ->where('type', Transaction::TYPE_TRANSFER)
+            ->where('payment_card_id', $card->id)
+            ->first();
+
+        $this->assertNotNull($payment);
+        $this->assertSame($julyInvoice->id, $payment->credit_card_invoice_id);
+        $this->assertStringContainsString('venc. 20/07/2026', $payment->description);
+        $this->assertSame('2026-09-15', $suggested->closing_date->toDateString());
+
+        $julyInvoice->refresh();
+        $this->assertSame(1000.0, (float) $julyInvoice->paid_amount);
+    }
+
+    public function test_user_can_edit_invoice_payment_reference(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+        $bank = BankAccount::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'Conta',
+            'color' => '#2563eb',
+        ]);
+        $card = PaymentCard::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'Mercado Pago',
+            'brand' => 'mastercard',
+            'type' => 'credit',
+            'color' => '#00a0e3',
+            'closing_day' => 15,
+            'due_day' => 20,
+        ]);
+
+        $july = CreditCardInvoice::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'payment_card_id' => $card->id,
+            'closing_date' => '2026-07-15',
+            'due_date' => '2026-07-20',
+            'status' => CreditCardInvoice::STATUS_PARTIAL,
+            'paid_amount' => 500,
+        ]);
+        $august = CreditCardInvoice::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'payment_card_id' => $card->id,
+            'closing_date' => '2026-08-15',
+            'due_date' => '2026-08-20',
+            'status' => CreditCardInvoice::STATUS_OPEN,
+            'paid_amount' => 0,
+        ]);
+
+        $payment = Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_TRANSFER,
+            'amount' => 500,
+            'description' => 'Pagamento de fatura · Mercado Pago · venc. 20/07/2026',
+            'date' => '2026-08-22',
+            'payment_method' => Transaction::PAYMENT_PIX,
+            'payment_card_id' => $card->id,
+            'bank_account_id' => $bank->id,
+            'credit_card_invoice_id' => $july->id,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('transactions.edit', $payment))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Transactions/Form')
+                ->where('transaction.id', $payment->id)
+                ->where('transaction.credit_card_invoice_id', $july->id)
+            );
+
+        $this->actingAs($owner)
+            ->put(route('transactions.update', $payment), [
+                'type' => Transaction::TYPE_TRANSFER,
+                'amount' => 500,
+                'date' => '2026-08-22',
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'payment_card_id' => $card->id,
+                'bank_account_id' => $bank->id,
+                'credit_card_invoice_id' => $august->id,
+            ])
+            ->assertRedirect();
+
+        $payment->refresh();
+        $july->refresh();
+        $august->refresh();
+
+        $this->assertSame($august->id, $payment->credit_card_invoice_id);
+        $this->assertStringContainsString('venc. 20/08/2026', $payment->description);
+        $this->assertSame(0.0, (float) $july->paid_amount);
+        $this->assertSame(500.0, (float) $august->paid_amount);
+    }
+
+    public function test_realign_moves_misassigned_payment_to_closing_cycle(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+        $card = PaymentCard::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'Mercado Pago',
+            'brand' => 'mastercard',
+            'type' => 'credit',
+            'color' => '#00a0e3',
+            'closing_day' => 15,
+            'due_day' => 20,
+        ]);
+
+        $wrong = CreditCardInvoice::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'payment_card_id' => $card->id,
+            'closing_date' => '2026-07-15',
+            'due_date' => '2026-07-20',
+            'status' => CreditCardInvoice::STATUS_PARTIAL,
+            'paid_amount' => 4362.60,
+        ]);
+
+        $payment = Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_TRANSFER,
+            'amount' => 4362.60,
+            'description' => 'Pagamento de fatura · Mercado Pago · venc. 20/07/2026',
+            'date' => '2026-08-16',
+            'payment_method' => Transaction::PAYMENT_PIX,
+            'payment_card_id' => $card->id,
+            'credit_card_invoice_id' => $wrong->id,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $this->actingAs($owner);
+        $target = app(\App\Services\CreditCardPaymentService::class)->realignToPaymentDate($payment);
+
+        $this->assertNotNull($target);
+        $this->assertSame('2026-09-20', $target->due_date->toDateString());
+        $this->assertSame(4362.60, (float) $target->paid_amount);
+
+        $wrong->refresh();
+        $payment->refresh();
+        $this->assertSame(0.0, (float) $wrong->paid_amount);
+        $this->assertSame($target->id, $payment->credit_card_invoice_id);
+        $this->assertStringContainsString('venc. 20/09/2026', $payment->description);
+    }
 }

@@ -206,21 +206,42 @@ class TransactionController extends Controller
     {
         $this->authorize('update', $transaction);
 
-        if ($transaction->type === Transaction::TYPE_TRANSFER) {
-            return redirect()->route('transactions.index')
-                ->with('error', 'Pagamentos de fatura não podem ser editados por este formulário.');
-        }
-
         $this->refreshRecurringHorizon();
+
+        $paymentCards = $this->paymentCardsForForm();
+
+        if (
+            $transaction->type === Transaction::TYPE_TRANSFER
+            && $transaction->credit_card_invoice_id
+            && $transaction->payment_card_id
+        ) {
+            $paymentCards = $paymentCards->map(function (array $card) use ($transaction) {
+                if ($card['id'] !== $transaction->payment_card_id) {
+                    return $card;
+                }
+
+                $ids = collect($card['invoices'])->pluck('id');
+                if (! $ids->contains($transaction->credit_card_invoice_id)) {
+                    $invoice = $transaction->creditCardInvoice
+                        ?? \App\Models\CreditCardInvoice::query()->find($transaction->credit_card_invoice_id);
+                    if ($invoice) {
+                        array_unshift($card['invoices'], $this->invoiceService->invoiceOptionPayload($invoice));
+                    }
+                }
+
+                return $card;
+            });
+        }
 
         return Inertia::render('Transactions/Form', [
             'transaction' => $transaction->load([
-                'paymentCard:id,name,brand,type,last_four,color',
+                'paymentCard:id,name,brand,type,last_four,color,closing_day,due_day',
                 'bankAccount:id,name,color',
                 'recurringBill:id,description',
+                'creditCardInvoice:id,payment_card_id,closing_date,due_date,status',
             ]),
             'categories' => Category::query()->orderBy('name')->get(['id', 'name', 'color']),
-            'paymentCards' => $this->paymentCardsForForm(),
+            'paymentCards' => $paymentCards,
             'bankAccounts' => $this->bankAccountsForForm(),
             'pendingRecurring' => $this->pendingRecurringForForm(),
             'recurringBills' => $this->recurringBillsForForm(),
@@ -231,22 +252,18 @@ class TransactionController extends Controller
     {
         $this->authorize('update', $transaction);
 
-        if ($transaction->type === Transaction::TYPE_TRANSFER) {
-            return redirect()->route('transactions.index')
-                ->with('error', 'Pagamentos de fatura não podem ser editados por este formulário.');
-        }
-
         $data = $request->validated();
+
+        if ($transaction->type === Transaction::TYPE_TRANSFER || $data['type'] === Transaction::TYPE_TRANSFER) {
+            if ($transaction->type !== Transaction::TYPE_TRANSFER || $data['type'] !== Transaction::TYPE_TRANSFER) {
+                return back()->with('error', 'Não é possível alterar o tipo de um pagamento de fatura.');
+            }
+
+            return $this->updateInvoicePayment($request, $transaction, $data);
+        }
 
         if (! empty($data['is_installment'])) {
             return back()->with('error', 'Não é possível converter um lançamento existente em compra parcelada.');
-        }
-
-        if ($data['type'] === Transaction::TYPE_TRANSFER) {
-            $this->balances->recordRetroactiveCashDeletion($transaction);
-            $transaction->delete();
-
-            return $this->storeInvoicePayment($request, $data);
         }
 
         $recurringBillId = $data['recurring_bill_id'] ?? null;
@@ -291,23 +308,23 @@ class TransactionController extends Controller
     {
         $this->authorize('delete', $transaction);
 
-        $this->balances->recordRetroactiveCashDeletion($transaction);
-        $transaction->delete();
+        if ($transaction->type === Transaction::TYPE_TRANSFER) {
+            $this->paymentService->delete($transaction);
+        } else {
+            $this->balances->recordRetroactiveCashDeletion($transaction);
+            $transaction->delete();
+        }
 
         return redirect()->route('transactions.index')->with('success', 'Transação excluída com sucesso.');
     }
 
     private function storeInvoicePayment(TransactionRequest $request, array $data): RedirectResponse
     {
-        $card = PaymentCard::query()->findOrFail($data['payment_card_id']);
         $bank = ! empty($data['bank_account_id'])
             ? BankAccount::query()->findOrFail($data['bank_account_id'])
             : null;
-        $invoice = $this->invoiceService->resolvePayableInvoice($card);
 
-        if (! $invoice) {
-            return back()->with('error', 'Não há fatura aberta para este cartão.');
-        }
+        $invoice = \App\Models\CreditCardInvoice::query()->findOrFail($data['credit_card_invoice_id']);
 
         $this->authorize('pay', $invoice);
 
@@ -322,6 +339,31 @@ class TransactionController extends Controller
         );
 
         return redirect()->route('payment-cards.index')->with('success', 'Pagamento de fatura registrado.');
+    }
+
+    private function updateInvoicePayment(
+        TransactionRequest $request,
+        Transaction $transaction,
+        array $data,
+    ): RedirectResponse {
+        $bank = ! empty($data['bank_account_id'])
+            ? BankAccount::query()->findOrFail($data['bank_account_id'])
+            : null;
+
+        $invoice = \App\Models\CreditCardInvoice::query()->findOrFail($data['credit_card_invoice_id']);
+
+        $this->authorize('pay', $invoice);
+
+        $this->paymentService->update(
+            $transaction,
+            $invoice,
+            (float) $data['amount'],
+            $data['date'],
+            $data['payment_method'],
+            $bank,
+        );
+
+        return redirect()->route('payment-cards.index')->with('success', 'Pagamento de fatura atualizado.');
     }
 
     private function resolveInvoiceId(array $data): ?string
@@ -348,7 +390,29 @@ class TransactionController extends Controller
         return PaymentCard::query()
             ->with('user:id,name')
             ->orderBy('name')
-            ->get(['id', 'name', 'brand', 'type', 'last_four', 'color', 'user_id', 'closing_day', 'due_day']);
+            ->get(['id', 'name', 'brand', 'type', 'last_four', 'color', 'user_id', 'closing_day', 'due_day'])
+            ->map(function (PaymentCard $card) {
+                $payload = [
+                    'id' => $card->id,
+                    'name' => $card->name,
+                    'brand' => $card->brand,
+                    'type' => $card->type,
+                    'last_four' => $card->last_four,
+                    'color' => $card->color,
+                    'user_id' => $card->user_id,
+                    'closing_day' => $card->closing_day,
+                    'due_day' => $card->due_day,
+                    'user' => $card->user,
+                    'invoices' => [],
+                ];
+
+                if ($card->type === PaymentCard::TYPE_CREDIT) {
+                    $payload['invoices'] = $this->invoiceService->invoiceOptionsForCard($card);
+                }
+
+                return $payload;
+            })
+            ->values();
     }
 
     private function bankAccountsForForm()

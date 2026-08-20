@@ -109,6 +109,14 @@ class TransactionRequest extends FormRequest
                     fn ($q) => $q->where('account_id', $accountId)->where('active', true)
                 ),
             ],
+            'credit_card_invoice_id' => [
+                Rule::requiredIf($isTransfer),
+                'nullable',
+                'uuid',
+                Rule::exists('credit_card_invoices', 'id')->where(
+                    fn ($q) => $q->where('account_id', $accountId)
+                ),
+            ],
         ];
     }
 
@@ -119,6 +127,16 @@ class TransactionRequest extends FormRequest
                 $card = PaymentCard::query()->find($this->input('payment_card_id'));
                 if (! $card || $card->type !== PaymentCard::TYPE_CREDIT) {
                     $validator->errors()->add('payment_card_id', 'Pagamento de fatura exige um cartão de crédito.');
+                }
+
+                if ($this->filled('credit_card_invoice_id') && $card) {
+                    $invoice = \App\Models\CreditCardInvoice::query()->find($this->input('credit_card_invoice_id'));
+                    if (! $invoice || $invoice->payment_card_id !== $card->id) {
+                        $validator->errors()->add(
+                            'credit_card_invoice_id',
+                            'A fatura selecionada não pertence a este cartão.'
+                        );
+                    }
                 }
 
                 return;
@@ -260,6 +278,7 @@ class TransactionRequest extends FormRequest
             'installment_amount' => 'valor da parcela',
             'recurring_transaction_id' => 'conta fixa pendente',
             'recurring_bill_id' => 'conta fixa',
+            'credit_card_invoice_id' => 'fatura',
         ];
     }
 }

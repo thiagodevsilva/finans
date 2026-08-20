@@ -113,26 +113,91 @@ class CreditCardInvoiceService
         }
     }
 
-    public function resolvePayableInvoice(PaymentCard $card): ?CreditCardInvoice
-    {
+    /**
+     * Fatura do pagamento: mesma regra da compra.
+     * Antes do fechamento → ciclo atual; no dia do fechamento ou depois → ciclo seguinte.
+     * (Não usa “fatura aberta mais antiga” — pagar o cartão a qualquer momento
+     * não significa quitar a fatura atrasada automaticamente.)
+     */
+    public function resolvePayableInvoice(
+        PaymentCard $card,
+        CarbonInterface|string|null $paymentDate = null,
+    ): ?CreditCardInvoice {
         if ($card->type !== PaymentCard::TYPE_CREDIT) {
             return null;
         }
 
-        $this->ensureUpcomingInvoices($card);
+        return $this->resolveForPurchase($card, $paymentDate ?? now());
+    }
 
-        $invoices = CreditCardInvoice::query()
+    /**
+     * Sugestão de fatura para o pagamento (mesma regra da compra).
+     * A UI pode sobrescrever — o usuário escolhe qual fatura está pagando.
+     */
+    public function suggestInvoiceForPayment(
+        PaymentCard $card,
+        CarbonInterface|string|null $paymentDate = null,
+    ): ?CreditCardInvoice {
+        return $this->resolvePayableInvoice($card, $paymentDate);
+    }
+
+    /**
+     * Opções de fatura para o formulário de pagamento (passados + próximos ciclos).
+     *
+     * @return list<array{id: string, label: string, due_date: string, closing_date: string, month_key: string}>
+     */
+    public function invoiceOptionsForCard(PaymentCard $card, int $monthsBack = 4, int $monthsAhead = 2): array
+    {
+        if ($card->type !== PaymentCard::TYPE_CREDIT || ! $card->closing_day || ! $card->due_day) {
+            return [];
+        }
+
+        $this->ensureUpcomingInvoices($card, $monthsAhead);
+
+        $cursor = now()->startOfMonth()->subMonthsNoOverflow($monthsBack);
+        $end = now()->startOfMonth()->addMonthsNoOverflow($monthsAhead);
+
+        while ($cursor->lte($end)) {
+            $probe = $cursor->copy()->day(min((int) $card->closing_day, $cursor->daysInMonth));
+            $this->resolveForPurchase($card, $probe);
+            $cursor->addMonthNoOverflow();
+        }
+
+        return CreditCardInvoice::query()
             ->where('payment_card_id', $card->id)
-            ->whereIn('status', [
-                CreditCardInvoice::STATUS_OPEN,
-                CreditCardInvoice::STATUS_CLOSED,
-                CreditCardInvoice::STATUS_PARTIAL,
-            ])
-            ->orderBy('due_date')
-            ->get();
+            ->orderByDesc('due_date')
+            ->limit($monthsBack + $monthsAhead + 2)
+            ->get()
+            ->map(fn (CreditCardInvoice $invoice) => $this->invoiceOptionPayload($invoice))
+            ->values()
+            ->all();
+    }
 
-        return $invoices->first(fn (CreditCardInvoice $invoice) => $invoice->remainingAmount() > 0)
-            ?? $invoices->first();
+    /**
+     * @return array{id: string, label: string, due_date: string, closing_date: string, month_key: string}
+     */
+    public function invoiceOptionPayload(CreditCardInvoice $invoice): array
+    {
+        $due = $invoice->due_date;
+        $months = [
+            1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril',
+            5 => 'Maio', 6 => 'Junho', 7 => 'Julho', 8 => 'Agosto',
+            9 => 'Setembro', 10 => 'Outubro', 11 => 'Novembro', 12 => 'Dezembro',
+        ];
+        $monthName = $months[(int) $due->month] ?? $due->format('m');
+
+        return [
+            'id' => $invoice->id,
+            'label' => sprintf(
+                '%s/%d · venc. %s',
+                $monthName,
+                (int) $due->year,
+                $due->format('d/m/Y'),
+            ),
+            'due_date' => $due->toDateString(),
+            'closing_date' => $invoice->closing_date->toDateString(),
+            'month_key' => $due->format('Y-m'),
+        ];
     }
 
     private function clampDay(int $year, int $month, int $day): Carbon

@@ -83,6 +83,7 @@ const form = useForm({
     payment_method: props.transaction?.payment_method || initialMethod(),
     payment_card_id: initialPaymentCardId(),
     bank_account_id: props.transaction?.bank_account_id || '',
+    credit_card_invoice_id: props.transaction?.credit_card_invoice_id || '',
     is_installment: false,
     total_amount: '',
     installments_count: '',
@@ -98,6 +99,8 @@ if (
 ) {
     form.payment_card_id = props.paymentCards.find((c) => c.type === 'credit').id;
 }
+
+const invoiceTouched = ref(!!props.transaction?.credit_card_invoice_id);
 
 const recurringSearch = ref('');
 const recurringOpen = ref(false);
@@ -159,6 +162,41 @@ const isInvestment = computed(() => form.type === 'investment');
 const selectedCard = computed(() => {
     if (!form.payment_card_id) return null;
     return props.paymentCards.find((c) => c.id === form.payment_card_id) || null;
+});
+
+const invoiceOptions = computed(() => selectedCard.value?.invoices || []);
+
+const suggestedInvoiceId = computed(() => {
+    const card = selectedCard.value;
+    if (!card?.closing_day || !form.date || !invoiceOptions.value.length) {
+        return null;
+    }
+
+    const [yearStr, monthStr, dayStr] = String(form.date).slice(0, 10).split('-');
+    let year = Number(yearStr);
+    let month = Number(monthStr);
+    const day = Number(dayStr);
+
+    if (day >= Number(card.closing_day)) {
+        month += 1;
+        if (month > 12) {
+            month = 1;
+            year += 1;
+        }
+    }
+
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const closingDay = Math.min(Number(card.closing_day), daysInMonth);
+    const closingDate = `${year}-${String(month).padStart(2, '0')}-${String(closingDay).padStart(2, '0')}`;
+
+    return invoiceOptions.value.find((invoice) => invoice.closing_date === closingDate)?.id
+        || null;
+});
+
+const suggestedInvoiceLabel = computed(() => {
+    const id = suggestedInvoiceId.value;
+    if (!id) return null;
+    return invoiceOptions.value.find((invoice) => invoice.id === id)?.label || null;
 });
 
 const isCreditCard = computed(() =>
@@ -274,6 +312,44 @@ watch(
             if (!form.payment_card_id && creditCards.value.length === 1) {
                 form.payment_card_id = creditCards.value[0].id;
             }
+            invoiceTouched.value = false;
+        } else {
+            form.credit_card_invoice_id = '';
+            invoiceTouched.value = false;
+        }
+    },
+);
+
+const applySuggestedInvoice = () => {
+    if (form.type !== 'transfer' || invoiceTouched.value) {
+        return;
+    }
+    if (suggestedInvoiceId.value) {
+        form.credit_card_invoice_id = suggestedInvoiceId.value;
+    }
+};
+
+watch(
+    () => [form.payment_card_id, form.date, suggestedInvoiceId.value],
+    () => {
+        if (form.type !== 'transfer') return;
+        if (!form.payment_card_id) {
+            form.credit_card_invoice_id = '';
+            return;
+        }
+        // Troca de cartão: nova sugestão.
+        applySuggestedInvoice();
+    },
+    { immediate: true },
+);
+
+watch(
+    () => form.payment_card_id,
+    (next, prev) => {
+        if (form.type !== 'transfer') return;
+        if (next !== prev) {
+            invoiceTouched.value = false;
+            applySuggestedInvoice();
         }
     },
 );
@@ -446,7 +522,13 @@ const submit = () => {
                         class="segmented-option"
                         :class="form.type === opt.value ? 'segmented-option-active' : 'segmented-option-idle'"
                     >
-                        <input v-model="form.type" type="radio" class="sr-only" :value="opt.value" :disabled="showingDemo" />
+                        <input
+                            v-model="form.type"
+                            type="radio"
+                            class="sr-only"
+                            :value="opt.value"
+                            :disabled="showingDemo || (isEdit && props.transaction?.type === 'transfer')"
+                        />
                         {{ opt.label }}
                     </label>
                 </div>
@@ -463,6 +545,28 @@ const submit = () => {
                         </option>
                     </select>
                     <InputError class="mt-2" :message="form.errors.payment_card_id" />
+                </div>
+                <div>
+                    <InputLabel value="Fatura de referência" />
+                    <select
+                        v-model="form.credit_card_invoice_id"
+                        class="mt-1 block w-full rounded-md border-slate-300"
+                        required
+                        :disabled="!form.payment_card_id || !invoiceOptions.length"
+                        @change="invoiceTouched = true"
+                    >
+                        <option value="" disabled>
+                            {{ form.payment_card_id ? 'Selecione a fatura' : 'Escolha o cartão primeiro' }}
+                        </option>
+                        <option v-for="invoice in invoiceOptions" :key="invoice.id" :value="invoice.id">
+                            {{ invoice.label }}{{ invoice.id === suggestedInvoiceId ? ' · sugerida' : '' }}
+                        </option>
+                    </select>
+                    <InputError class="mt-2" :message="form.errors.credit_card_invoice_id" />
+                    <p v-if="suggestedInvoiceLabel" class="mt-1 text-xs text-horizon-500">
+                        Sugestão pela data e fechamento do cartão: {{ suggestedInvoiceLabel }}.
+                        Você pode escolher outra fatura (ex.: pagar no dia 22 a fatura que fechou no dia 15).
+                    </p>
                 </div>
                 <div>
                     <InputLabel value="Forma de pagamento" />
@@ -495,7 +599,7 @@ const submit = () => {
                     <InputError class="mt-2" :message="form.errors.date" />
                 </div>
                 <p class="text-xs text-horizon-500">
-                    Descrição e categoria são padronizadas (Pagamento de fatura · cartão). Pagamentos parciais no mesmo mês são permitidos.
+                    Descrição e categoria são padronizadas (Pagamento de fatura · cartão). Pagamentos parciais são permitidos.
                 </p>
                 <p class="text-xs text-horizon-500">
                     PIX, transferência e dinheiro contam como saída de caixa. Pagamento com outro cartão não.

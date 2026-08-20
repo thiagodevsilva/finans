@@ -45,7 +45,8 @@ alwaysApply: true
 ## Contabilidade
 
 - Compra no cartão / parcela / conta fixa confirmada = `expense` (conta em gastos).
-- Pagamento de fatura = `transfer` (não conta em gastos; `category_id` null).
+- Pagamento de fatura = `transfer` (não conta em gastos).
+- No form de pagamento: **sugerir** a fatura pelo ciclo (antes do fechamento → atual; no dia/depois → seguinte), mas o usuário **escolhe** a fatura livremente (`credit_card_invoice_id`). Pagamentos de fatura podem ser editados.
 - Cartão de crédito exige `closing_day` e `due_day`.
 - Cartão benefício não reduz caixa e não gera fatura/parcelas.
 - Contas fixas geram `planned`; só `confirmed` entra em dashboard/relatórios.

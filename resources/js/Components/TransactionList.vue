@@ -75,13 +75,8 @@ const amountClass = (type) => {
                     Ver compra
                 </Link>
             </div>
-            <div v-if="showActions && canEdit(tx) && tx.type !== 'transfer'" class="mt-3 flex gap-4 border-t border-black/5 pt-3 text-sm">
+            <div v-if="showActions && canEdit(tx)" class="mt-3 flex gap-4 border-t border-black/5 pt-3 text-sm">
                 <Link :href="route('transactions.edit', tx.id)" class="font-medium text-cta hover:underline">Editar</Link>
-                <button type="button" class="font-medium text-red-600 hover:underline" @click="emit('destroy', tx)">
-                    Excluir
-                </button>
-            </div>
-            <div v-else-if="showActions && canEdit(tx)" class="mt-3 flex gap-4 border-t border-black/5 pt-3 text-sm">
                 <button type="button" class="font-medium text-red-600 hover:underline" @click="emit('destroy', tx)">
                     Excluir
                 </button>
@@ -144,7 +139,6 @@ const amountClass = (type) => {
                     <td v-if="showActions" class="whitespace-nowrap px-5 py-3 text-right">
                         <template v-if="canEdit(tx)">
                             <Link
-                                v-if="tx.type !== 'transfer'"
                                 :href="route('transactions.edit', tx.id)"
                                 class="text-cta hover:underline"
                             >
