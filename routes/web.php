@@ -6,6 +6,7 @@ use App\Http\Controllers\BalanceAnchorController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DashboardPinnedChartController;
 use App\Http\Controllers\Email\UnsubscribeController;
 use App\Http\Controllers\InstallmentPlanController;
 use App\Http\Controllers\MemberController;
@@ -92,6 +93,8 @@ Route::middleware(['auth', 'last.seen'])->group(function () {
 
     Route::middleware('family')->group(function () {
         Route::get('/dashboard', DashboardController::class)->name('dashboard');
+        Route::put('/dashboard/pinned-chart', [DashboardPinnedChartController::class, 'update'])
+            ->name('dashboard.pinned-chart');
 
         Route::post('/balance-anchors', [BalanceAnchorController::class, 'store'])->name('balance-anchors.store');
         Route::post('/balance-anchors/keep', [BalanceAnchorController::class, 'keep'])->name('balance-anchors.keep');

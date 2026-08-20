@@ -1,6 +1,11 @@
 <script setup>
 import AppMark from '@/Components/AppMark.vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
+
+const page = usePage();
+const assetVersion = computed(() => page.props.app?.assetVersion || '1');
+const capaSrc = computed(() => `/images/capa-mulher.png?v=${assetVersion.value}`);
 </script>
 
 <template>
@@ -22,7 +27,7 @@ import { Link } from '@inertiajs/vue3';
 
         <div class="relative hidden overflow-hidden bg-brand-500 lg:block">
             <img
-                src="/images/capa-mulher.png"
+                :src="capaSrc"
                 alt=""
                 class="absolute bottom-0 left-1/2 h-[90%] w-auto max-w-none -translate-x-1/2 object-contain object-bottom select-none"
                 style="aspect-ratio: 1024 / 1536;"

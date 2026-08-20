@@ -346,6 +346,9 @@ class BalanceService
     /**
      * Saldo sugerido após âncora stale: saldo efetivo do fim do mês anterior
      * + movimentações de caixa do mês atual até $at.
+     *
+     * Sem âncora no mês anterior (ex.: âncora inicial no mês corrente + PIX/fatura
+     * no mesmo dia), cai no ajuste da âncora vigente — evita saldo null na tela.
      */
     public function suggestedBalanceIgnoringLatestAnchor(?Carbon $at = null): ?float
     {
@@ -359,7 +362,7 @@ class BalanceService
         $previousMonthBalance = $this->balanceWithStaleDelta($previousMonthEnd);
 
         if ($previousMonthBalance === null) {
-            return null;
+            return $this->balanceWithStaleDelta($at);
         }
 
         return round(

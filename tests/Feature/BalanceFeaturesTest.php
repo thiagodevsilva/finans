@@ -726,4 +726,73 @@ class BalanceFeaturesTest extends TestCase
         $meta = $balances->staleRecalcMeta(now(), 1000.0);
         $this->assertFalse($meta['needs_stale_recalc']);
     }
+
+    public function test_same_day_invoice_payment_after_initial_anchor_keeps_balance(): void
+    {
+        $this->travelTo('2026-08-20 10:00:00');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+        $card = PaymentCard::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'Itaú',
+            'brand' => 'visa',
+            'type' => PaymentCard::TYPE_CREDIT,
+            'last_four' => '9999',
+            'color' => '#ff6600',
+            'closing_day' => 10,
+            'due_day' => 17,
+        ]);
+
+        BalanceAnchor::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'amount' => 10000,
+            'as_of_date' => '2026-08-20',
+            'source' => BalanceAnchor::SOURCE_INITIAL,
+            'checkin_month' => '2026-08',
+        ]);
+
+        $invoice = \App\Models\CreditCardInvoice::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'payment_card_id' => $card->id,
+            'closing_date' => '2026-08-10',
+            'due_date' => '2026-08-17',
+            'status' => 'open',
+            'paid_amount' => 0,
+        ]);
+
+        $this->travelTo('2026-08-20 11:00:00');
+
+        // Pagamento no mesmo dia da âncora: antes sumia o saldo (suggested = null).
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_TRANSFER,
+            'amount' => 1000,
+            'description' => 'Pagamento de fatura · Itaú',
+            'date' => '2026-08-20',
+            'payment_method' => Transaction::PAYMENT_PIX,
+            'payment_card_id' => $card->id,
+            'credit_card_invoice_id' => $invoice->id,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $balances = app(\App\Services\BalanceService::class);
+        $this->actingAs($owner);
+
+        $this->assertSame(9000.0, $balances->effectiveBalanceAt(now()));
+
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 8, 'year' => 2026]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('summary.balance', 9000)
+                ->where('summary.card_payments', 1000)
+                ->where('balanceMeta.needs_initial', false)
+            );
+    }
 }

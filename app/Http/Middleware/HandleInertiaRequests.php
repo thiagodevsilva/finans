@@ -40,6 +40,7 @@ class HandleInertiaRequests extends Middleware
                     'is_admin' => $user->isAdmin(),
                     'account_id' => $user->account_id,
                     'onboarding_status' => $user->onboarding_status,
+                    'pinned_dashboard_chart' => $user->pinned_dashboard_chart,
                     'marketing_emails_opted_in' => (bool) $user->marketing_emails_opted_in,
                 ] : null,
                 'account' => $user?->account ? [

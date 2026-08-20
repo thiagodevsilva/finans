@@ -4,6 +4,7 @@ import BalanceCheckinModal from '@/Components/BalanceCheckinModal.vue';
 import Card from '@/Components/Card.vue';
 import HelpTip from '@/Components/HelpTip.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
+import ReportChart from '@/Components/ReportChart.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import TourDemoBanner from '@/Components/TourDemoBanner.vue';
 import TransactionList from '@/Components/TransactionList.vue';
@@ -45,6 +46,10 @@ const props = defineProps({
     },
     filters: Object,
     recentTransactions: Array,
+    pinnedChart: {
+        type: Object,
+        default: null,
+    },
 });
 
 const page = usePage();
@@ -68,6 +73,9 @@ const recurringSummary = computed(() =>
 );
 const recentTransactions = computed(() =>
     showingDemo.value ? demoDashboardData.recentTransactions : props.recentTransactions,
+);
+const pinnedChart = computed(() =>
+    showingDemo.value ? null : props.pinnedChart,
 );
 
 const years = computed(() => {
@@ -101,7 +109,13 @@ const showStaleBanner = computed(() =>
 );
 
 const monthBalanceHelp =
-    'Só saídas de dinheiro (PIX, débito, dinheiro etc.) e investimentos. Compras no crédito e no cartão benefício entram nos gastos do mês, mas não neste saldo.';
+    'Só gastos à vista (PIX, débito, dinheiro etc.) e investimentos. Compras no crédito/benefício e pagamentos de fatura não entram neste número — a fatura só reduz o saldo de caixa.';
+
+const debitHelp =
+    'Compras pagas na hora (PIX, débito, dinheiro, débito automático). Não inclui pagamento de fatura de cartão.';
+
+const cardPaymentsHelp =
+    'Valor pago nas faturas de crédito no mês. Sai do saldo de caixa, mas não é gasto novo — a compra já entrou em “Gastos no crédito”.';
 
 const staleHelp =
     'Você lançou, alterou ou excluiu movimentações com data anterior à referência do saldo atual. A sugestão parte do saldo do fim do mês anterior e soma as movimentações de caixa deste mês.';
@@ -341,8 +355,17 @@ onMounted(() => {
                             <p class="text-xs text-horizon-500 sm:text-sm">
                                 <span class="sm:hidden">Débito</span>
                                 <span class="hidden sm:inline">Gastos no débito</span>
+                                <HelpTip class="ml-1" :text="debitHelp" label="Sobre gastos no débito" />
                                 <span class="ml-1 font-semibold tabular-nums text-red-600">
                                     {{ formatBRL(summary.expense_debit) }}
+                                </span>
+                            </p>
+                            <p class="text-xs text-horizon-500 sm:text-sm">
+                                <span class="sm:hidden">Faturas</span>
+                                <span class="hidden sm:inline">Pagamento de cartões</span>
+                                <HelpTip class="ml-1" :text="cardPaymentsHelp" label="Sobre pagamento de cartões" />
+                                <span class="ml-1 font-semibold tabular-nums text-amber-600">
+                                    {{ formatBRL(summary.card_payments ?? 0) }}
                                 </span>
                             </p>
                         </div>
@@ -379,6 +402,26 @@ onMounted(() => {
                     :style="{ width: `${recurringSummary.paid_percent}%` }"
                 />
             </div>
+        </div>
+
+        <div
+            v-if="pinnedChart"
+            class="mb-4 rounded-[16px] bg-white px-4 py-4 shadow-soft sm:px-6 sm:py-5"
+            data-tour="dash-pinned-chart"
+        >
+            <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div class="min-w-0">
+                    <p class="text-xs font-medium text-horizon-500">Gráfico fixado</p>
+                    <h2 class="text-base font-bold text-navy-700 sm:text-lg">{{ pinnedChart.title }}</h2>
+                </div>
+                <Link
+                    :href="route('reports.index', { month: filters.month, year: filters.year })"
+                    class="inline-flex shrink-0 items-center rounded-xl border border-horizon-200 px-3 py-1.5 text-xs font-semibold text-navy-700 hover:bg-horizon-50 sm:text-sm"
+                >
+                    Ver relatórios
+                </Link>
+            </div>
+            <ReportChart :chart="pinnedChart" compact />
         </div>
 
         <h2 class="mb-2 text-base font-bold text-navy-700 sm:mb-3 sm:text-lg">Últimas transações</h2>

@@ -36,6 +36,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'is_admin',
         'last_seen_at',
         'onboarding_status',
+        'pinned_dashboard_chart',
         'marketing_emails_opted_in',
     ];
 

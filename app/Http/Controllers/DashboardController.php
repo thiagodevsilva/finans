@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\PaymentCard;
 use App\Models\Transaction;
 use App\Services\BalanceService;
+use App\Services\ReportChartService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -12,7 +13,7 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request, BalanceService $balances): Response
+    public function __invoke(Request $request, BalanceService $balances, ReportChartService $charts): Response
     {
         $month = (int) $request->input('month', now()->month);
         $year = (int) $request->input('year', now()->year);
@@ -55,7 +56,10 @@ class DashboardController extends Controller
             ->sum('amount');
 
         // Débito/PIX/dinheiro etc. — exclui crédito e benefício (não saem do caixa do mês).
+        // Pagamento de fatura é transfer e NÃO entra aqui.
         $expenseDebit = round($expense - $expenseCredit - $expenseBenefit, 2);
+
+        $cardPayments = $charts->cardPaymentsTotal($start->toDateString(), $end->toDateString());
 
         $recent = Transaction::query()
             ->with([
@@ -101,15 +105,21 @@ class DashboardController extends Controller
             ? $balances->staleRecalcMeta(null, $cashBalance)
             : ['needs_stale_recalc' => false, 'suggested_balance' => null, 'stale_recalc_mode' => null];
 
+        $pinnedChartId = $request->user()->pinned_dashboard_chart;
+        $pinnedChart = $charts->isValidChartId($pinnedChartId)
+            ? $charts->build($pinnedChartId, $month, $year)
+            : null;
+
         return Inertia::render('Dashboard', [
             'summary' => [
                 'balance' => $cashBalance,
-                // Só saídas de dinheiro do mês (crédito e benefício não entram).
+                // Só gastos à vista + investimentos (crédito, benefício e fatura não entram).
                 'month_balance' => round($income - $expenseDebit - $investments, 2),
                 'income' => $income,
                 'expense' => $expense,
                 'expense_credit' => $expenseCredit,
                 'expense_debit' => $expenseDebit,
+                'card_payments' => $cardPayments,
                 'investments' => $investments,
             ],
             'balanceMeta' => [
@@ -136,6 +146,7 @@ class DashboardController extends Controller
                 'year' => $year,
             ],
             'recentTransactions' => $recent,
+            'pinnedChart' => $pinnedChart,
         ]);
     }
 }

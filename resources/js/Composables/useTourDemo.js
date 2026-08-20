@@ -20,6 +20,7 @@ export const demoDashboardData = {
         expense: 3100,
         expense_credit: 1800,
         expense_debit: 1300,
+        card_payments: 890.5,
         balance: 8420.5,
         month_balance: 3400,
         investments: 500,
