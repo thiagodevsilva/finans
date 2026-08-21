@@ -112,7 +112,7 @@ const monthBalanceHelp =
     'Só gastos à vista (PIX, débito, dinheiro etc.) e investimentos. Compras no crédito/benefício e pagamentos de fatura não entram neste número — a fatura só reduz o saldo de caixa.';
 
 const debitHelp =
-    'Compras pagas na hora (PIX, débito, dinheiro, débito automático). Não inclui pagamento de fatura de cartão.';
+    'Tudo que saiu à vista no mês: PIX, dinheiro, transferência, débito, débito automático e cartão débito. Não é só “débito bancário”. Crédito, benefício e pagamento de fatura ficam fora.';
 
 const cardPaymentsHelp =
     'Valor pago nas faturas de crédito no mês. Sai do saldo de caixa, mas não é gasto novo — a compra já entrou em “Gastos no crédito”.';

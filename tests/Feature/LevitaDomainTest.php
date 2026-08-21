@@ -536,4 +536,65 @@ class LevitaDomainTest extends TestCase
             'account_id' => $account->id,
         ]);
     }
+
+    public function test_transactions_index_filters_by_multiple_payment_methods(): void
+    {
+        $this->travelTo('2026-08-20');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $pix = Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 50,
+            'description' => 'PIX mercado',
+            'date' => '2026-08-10',
+            'payment_method' => Transaction::PAYMENT_PIX,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+        $cash = Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 20,
+            'description' => 'Dinheiro padaria',
+            'date' => '2026-08-11',
+            'payment_method' => Transaction::PAYMENT_CASH,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 80,
+            'description' => 'Débito farmácia',
+            'date' => '2026-08-12',
+            'payment_method' => Transaction::PAYMENT_DEBIT,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('transactions.index', [
+                'month' => 8,
+                'year' => 2026,
+                'type' => 'expense',
+                'payment_methods' => ['pix', 'cash'],
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Transactions/Index')
+                ->where('filters.payment_methods', ['pix', 'cash'])
+                ->has('transactions.data', 2)
+                ->where('transactions.data.0.id', $cash->id)
+                ->where('transactions.data.1.id', $pix->id)
+                ->where('filterSummary.count', 2)
+                ->where('filterSummary.signed_total', -70)
+            );
+    }
 }

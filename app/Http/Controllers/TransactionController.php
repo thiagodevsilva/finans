@@ -37,18 +37,12 @@ class TransactionController extends Controller
         $year = (int) $request->input('year', now()->year);
         $type = $request->input('type');
         $categoryId = $request->input('category_id');
+        $paymentMethods = $this->normalizePaymentMethodsFilter($request->input('payment_methods'));
 
         $start = Carbon::create($year, $month, 1)->startOfMonth();
         $end = (clone $start)->endOfMonth();
 
-        $transactions = Transaction::query()
-            ->with([
-                'category:id,name,color',
-                'user:id,name',
-                'paymentCard:id,name,brand,type,last_four,color',
-                'bankAccount:id,name,color',
-                'installmentPlan:id,description,total_amount,installments_count',
-            ])
+        $filteredQuery = Transaction::query()
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->where(function ($q) {
                 $q->where('status', Transaction::STATUS_CONFIRMED)
@@ -56,6 +50,32 @@ class TransactionController extends Controller
             })
             ->when($type, fn ($q) => $q->where('type', $type))
             ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
+            ->when($paymentMethods !== [], fn ($q) => $q->whereIn('payment_method', $paymentMethods));
+
+        $filterSummary = (clone $filteredQuery)
+            ->selectRaw(
+                'COUNT(*) as total_count, COALESCE(SUM(CASE
+                    WHEN type = ? THEN amount
+                    WHEN type IN (?, ?, ?) THEN -amount
+                    ELSE 0
+                END), 0) as signed_total',
+                [
+                    Transaction::TYPE_INCOME,
+                    Transaction::TYPE_EXPENSE,
+                    Transaction::TYPE_INVESTMENT,
+                    Transaction::TYPE_TRANSFER,
+                ]
+            )
+            ->first();
+
+        $transactions = (clone $filteredQuery)
+            ->with([
+                'category:id,name,color',
+                'user:id,name',
+                'paymentCard:id,name,brand,type,last_four,color',
+                'bankAccount:id,name,color',
+                'installmentPlan:id,description,total_amount,installments_count',
+            ])
             ->orderByDesc('date')
             ->orderByDesc('created_at')
             ->paginate(20)
@@ -69,6 +89,11 @@ class TransactionController extends Controller
                 'year' => $year,
                 'type' => $type,
                 'category_id' => $categoryId,
+                'payment_methods' => $paymentMethods,
+            ],
+            'filterSummary' => [
+                'count' => (int) ($filterSummary->total_count ?? 0),
+                'signed_total' => round((float) ($filterSummary->signed_total ?? 0), 2),
             ],
         ]);
     }
@@ -479,5 +504,26 @@ class TransactionController extends Controller
             ->where('active', true)
             ->get()
             ->each(fn (RecurringBill $bill) => $this->recurringBillService->materializeAhead($bill, 3));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizePaymentMethodsFilter(mixed $raw): array
+    {
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+
+        if (! is_array($raw)) {
+            $raw = [$raw];
+        }
+
+        $allowed = Transaction::PAYMENT_METHODS;
+
+        return array_values(array_unique(array_filter(
+            array_map('strval', $raw),
+            fn (string $method) => in_array($method, $allowed, true)
+        )));
     }
 }
