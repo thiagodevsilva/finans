@@ -4,19 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\BankAccountRequest;
 use App\Models\BankAccount;
+use App\Services\OwnershipResolver;
+use App\Services\ViewContext;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class BankAccountController extends Controller
 {
-    public function index(): Response
+    public function index(ViewContext $view): Response
     {
         $this->authorize('viewAny', BankAccount::class);
 
         $user = auth()->user();
 
         $bankAccounts = BankAccount::query()
+            ->forViewContext($view)
             ->with('user:id,name')
             ->orderBy('name')
             ->get()
@@ -25,6 +28,7 @@ class BankAccountController extends Controller
                 'name' => $bankAccount->name,
                 'color' => $bankAccount->color,
                 'user_id' => $bankAccount->user_id,
+                'company_id' => $bankAccount->company_id,
                 'user' => $bankAccount->user,
                 'can_edit' => $user->isOwner() || $bankAccount->user_id === $user->id,
             ]);
@@ -38,9 +42,15 @@ class BankAccountController extends Controller
     {
         $this->authorize('create', BankAccount::class);
 
+        $data = $request->validated();
+        $ownerId = OwnershipResolver::resolveOwnerId($request->user(), $data['user_id'] ?? null);
+        $companyId = OwnershipResolver::resolveCompanyId($ownerId, $data['company_id'] ?? null);
+        unset($data['user_id'], $data['company_id']);
+
         BankAccount::create([
-            ...$request->validated(),
-            'user_id' => $request->user()->id,
+            ...$data,
+            'user_id' => $ownerId,
+            'company_id' => $companyId,
             'account_id' => $request->user()->account_id,
         ]);
 
@@ -51,7 +61,9 @@ class BankAccountController extends Controller
     {
         $this->authorize('update', $bankAccount);
 
-        $bankAccount->update($request->validated());
+        $data = $request->validated();
+        unset($data['user_id'], $data['company_id']);
+        $bankAccount->update($data);
 
         return back()->with('success', 'Conta atualizada com sucesso.');
     }

@@ -6,6 +6,7 @@ use App\Http\Requests\InstallmentPlanRequest;
 use App\Models\InstallmentPlan;
 use App\Models\Transaction;
 use App\Services\InstallmentPlanService;
+use App\Services\OwnershipResolver;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -27,7 +28,19 @@ class InstallmentPlanController extends Controller
     {
         $this->authorize('create', InstallmentPlan::class);
 
-        $plan = $this->service->create($request->user(), $request->validated());
+        $data = $request->validated();
+        $ownerId = OwnershipResolver::resolveOwnerId($request->user(), $data['user_id'] ?? null);
+        $isShared = (bool) ($data['is_shared'] ?? false);
+        $companyId = OwnershipResolver::resolveCompanyId($ownerId, $data['company_id'] ?? null, $isShared);
+        unset($data['user_id'], $data['is_shared'], $data['company_id']);
+
+        $plan = $this->service->create($request->user(), [
+            ...$data,
+            'user_id' => $ownerId,
+            'is_shared' => $isShared,
+            'company_id' => $companyId,
+            'created_by' => $request->user()->id,
+        ]);
 
         return redirect()
             ->route('installment-plans.show', $plan)

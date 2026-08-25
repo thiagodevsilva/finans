@@ -22,7 +22,10 @@ class RecurringBillService
 
             $bill = RecurringBill::create([
                 'account_id' => $user->account_id,
-                'user_id' => $user->id,
+                'user_id' => $data['user_id'] ?? $user->id,
+                'is_shared' => (bool) ($data['is_shared'] ?? false),
+                'company_id' => $data['company_id'] ?? null,
+                'created_by' => $data['created_by'] ?? $user->id,
                 'category_id' => $data['category_id'],
                 'description' => $data['description'],
                 'kind' => $kind,
@@ -117,19 +120,26 @@ class RecurringBillService
      *     paid_by_bill: array<string, float>
      * }
      */
-    public function summarizeMonth(?Carbon $at = null): array
+    public function summarizeMonth(?Carbon $at = null, ?ViewContext $view = null): array
     {
+        if ($view === null && auth()->check()) {
+            $view = app(ViewContext::class);
+        }
+
         $start = ($at ?? now())->copy()->startOfMonth();
         $end = $start->copy()->endOfMonth();
         $range = [$start->toDateString(), $end->toDateString()];
 
-        $confirmed = Transaction::query()
+        $txQuery = fn () => Transaction::query()
+            ->when($view, fn ($q) => $q->forViewContext($view));
+
+        $confirmed = $txQuery()
             ->whereNotNull('recurring_bill_id')
             ->where('status', Transaction::STATUS_CONFIRMED)
             ->whereBetween('date', $range)
             ->get(['id', 'amount', 'recurring_bill_id']);
 
-        $planned = Transaction::query()
+        $planned = $txQuery()
             ->whereNotNull('recurring_bill_id')
             ->where('status', Transaction::STATUS_PLANNED)
             ->whereBetween('date', $range)
@@ -146,6 +156,7 @@ class RecurringBillService
             ->all();
 
         $variableBills = RecurringBill::query()
+            ->when($view, fn ($q) => $q->forViewContext($view))
             ->where('kind', RecurringBill::KIND_VARIABLE)
             ->where('active', true)
             ->whereDate('start_date', '<=', $end->toDateString())
@@ -272,11 +283,19 @@ class RecurringBillService
                     ]
                 );
 
-                $confirmed->update([
+                $updates = [
                     'description' => $data['description'] ?? $confirmed->description,
                     'category_id' => $data['category_id'] ?? $confirmed->category_id,
                     'credit_card_invoice_id' => $data['credit_card_invoice_id'] ?? $confirmed->credit_card_invoice_id,
-                ]);
+                ];
+
+                foreach (['user_id', 'is_shared', 'company_id', 'created_by'] as $key) {
+                    if (array_key_exists($key, $data)) {
+                        $updates[$key] = $data[$key];
+                    }
+                }
+
+                $confirmed->update($updates);
 
                 return $confirmed->fresh();
             }
@@ -284,7 +303,10 @@ class RecurringBillService
 
         return Transaction::create([
             'account_id' => $user->account_id,
-            'user_id' => $user->id,
+            'user_id' => $data['user_id'] ?? $user->id,
+            'is_shared' => (bool) ($data['is_shared'] ?? $bill->is_shared),
+            'company_id' => array_key_exists('company_id', $data) ? $data['company_id'] : $bill->company_id,
+            'created_by' => $data['created_by'] ?? $user->id,
             'category_id' => $data['category_id'],
             'type' => Transaction::TYPE_EXPENSE,
             'amount' => $data['amount'],
@@ -433,6 +455,9 @@ class RecurringBillService
         return Transaction::create([
             'account_id' => $bill->account_id,
             'user_id' => $bill->user_id,
+            'is_shared' => (bool) $bill->is_shared,
+            'company_id' => $bill->company_id,
+            'created_by' => $bill->created_by,
             'category_id' => $bill->category_id,
             'type' => Transaction::TYPE_EXPENSE,
             'amount' => $bill->estimated_amount,

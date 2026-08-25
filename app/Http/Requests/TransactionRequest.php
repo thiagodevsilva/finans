@@ -110,12 +110,22 @@ class TransactionRequest extends FormRequest
                 ),
             ],
             'credit_card_invoice_id' => [
-                Rule::requiredIf($isTransfer),
                 'nullable',
                 'uuid',
                 Rule::exists('credit_card_invoices', 'id')->where(
                     fn ($q) => $q->where('account_id', $accountId)
                 ),
+            ],
+            'user_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('users', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
+            ],
+            'is_shared' => ['sometimes', 'boolean'],
+            'company_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('companies', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
             ],
         ];
     }
@@ -178,7 +188,12 @@ class TransactionRequest extends FormRequest
     {
         $this->merge([
             'is_installment' => $this->boolean('is_installment'),
+            'is_shared' => $this->boolean('is_shared'),
         ]);
+
+        if ($this->boolean('is_shared')) {
+            $this->merge(['company_id' => null]);
+        }
 
         $needsBank = in_array($this->input('payment_method'), Transaction::BANK_LINKED_PAYMENT_METHODS, true);
 
@@ -279,6 +294,9 @@ class TransactionRequest extends FormRequest
             'recurring_transaction_id' => 'conta fixa pendente',
             'recurring_bill_id' => 'conta fixa',
             'credit_card_invoice_id' => 'fatura',
+            'user_id' => 'membro',
+            'is_shared' => 'compartilhado',
+            'company_id' => 'CNPJ',
         ];
     }
 }

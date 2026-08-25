@@ -10,7 +10,8 @@ import { useAppTour } from '@/Composables/useAppTour';
 import { useTourDemo } from '@/Composables/useTourDemo';
 import { TRANSACTIONS_TOUR_ID } from '@/tours/transactions';
 import TourDemoBanner from '@/Components/TourDemoBanner.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import OwnershipFields from '@/Components/OwnershipFields.vue';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -36,7 +37,18 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    members: {
+        type: Array,
+        default: () => [],
+    },
+    companies: {
+        type: Array,
+        default: () => [],
+    },
 });
+
+const page = usePage();
+const authUserId = computed(() => page.props.auth.user?.id);
 
 const isEdit = computed(() => !!props.transaction);
 
@@ -90,6 +102,9 @@ const form = useForm({
     installment_amount: '',
     recurring_transaction_id: '',
     recurring_bill_id: initialBillId,
+    user_id: props.transaction?.user_id || authUserId.value || '',
+    is_shared: props.transaction?.is_shared || false,
+    company_id: props.transaction?.company_id || '',
 });
 
 if (
@@ -536,6 +551,13 @@ const submit = () => {
                 </div>
                 <InputError class="mt-2" :message="form.errors.type" />
             </div>
+
+            <OwnershipFields
+                v-if="!isEdit && form.type !== 'transfer'"
+                :form="form"
+                :members="members"
+                :companies="companies"
+            />
 
             <template v-if="form.type === 'transfer'">
                 <div>

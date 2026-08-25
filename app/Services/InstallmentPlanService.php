@@ -24,9 +24,17 @@ class InstallmentPlanService
             $baseCents = intdiv($totalCents, $count);
             $remainder = $totalCents - ($baseCents * $count);
 
+            $ownerId = $data['user_id'] ?? $user->id;
+            $isShared = (bool) ($data['is_shared'] ?? false);
+            $companyId = $data['company_id'] ?? null;
+            $createdBy = $data['created_by'] ?? $user->id;
+
             $plan = InstallmentPlan::create([
                 'account_id' => $user->account_id,
-                'user_id' => $user->id,
+                'user_id' => $ownerId,
+                'is_shared' => $isShared,
+                'company_id' => $companyId,
+                'created_by' => $createdBy,
                 'category_id' => $data['category_id'],
                 'payment_card_id' => $card->id,
                 'description' => $data['description'],
@@ -46,7 +54,10 @@ class InstallmentPlanService
 
                 Transaction::create([
                     'account_id' => $user->account_id,
-                    'user_id' => $user->id,
+                    'user_id' => $ownerId,
+                    'is_shared' => $isShared,
+                    'company_id' => $companyId,
+                    'created_by' => $createdBy,
                     'category_id' => $data['category_id'],
                     'type' => Transaction::TYPE_EXPENSE,
                     'amount' => $amountCents / 100,

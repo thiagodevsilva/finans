@@ -18,6 +18,9 @@ const props = defineProps({
     previousMonthBalance: { type: Number, default: null },
     /** Valor sugerido ao abrir em modo update (ex.: recálculo após retroativos). */
     suggestedAmount: { type: [Number, String], default: null },
+    memberId: { type: String, default: null },
+    /** Se false, o usuário pode fechar sem informar saldo. */
+    required: { type: Boolean, default: true },
 });
 
 const emit = defineEmits(['close']);
@@ -28,9 +31,12 @@ const form = useForm({
     amount: '',
     as_of_date: today(),
     source: 'initial',
+    member_id: null,
 });
 
-const keepForm = useForm({});
+const keepForm = useForm({
+    member_id: null,
+});
 
 const title = computed(() => {
     if (props.mode === 'monthly') return 'Saldo do novo mês';
@@ -45,13 +51,13 @@ const description = computed(() => {
     if (props.mode === 'update') {
         return 'Informe o saldo de caixa (contas + dinheiro) na data escolhida. Os lançamentos depois dessa data serão recalculados automaticamente.';
     }
-    return 'Para começar o controle de caixa, informe quanto a família tem hoje somando contas e dinheiro. Compras no crédito não entram aqui até você pagar a fatura.';
+    return 'Para começar o controle de caixa, informe quanto você tem hoje somando contas e dinheiro. Compras no crédito não entram aqui até você pagar a fatura.';
 });
 
-const closeable = computed(() => props.mode === 'update');
+const closeable = computed(() => props.mode === 'update' || !props.required);
 
 watch(
-    () => [props.show, props.mode, props.suggestedAmount],
+    () => [props.show, props.mode, props.suggestedAmount, props.memberId],
     ([show]) => {
         if (!show) return;
         form.clearErrors();
@@ -60,6 +66,8 @@ watch(
             : '';
         form.as_of_date = today();
         form.source = props.mode === 'initial' ? 'initial' : (props.mode === 'monthly' ? 'monthly_update' : 'manual');
+        form.member_id = props.memberId;
+        keepForm.member_id = props.memberId;
     },
 );
 

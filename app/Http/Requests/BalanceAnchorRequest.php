@@ -15,6 +15,8 @@ class BalanceAnchorRequest extends FormRequest
 
     public function rules(): array
     {
+        $accountId = $this->user()->account_id;
+
         return [
             'amount' => ['required', 'numeric'],
             'as_of_date' => ['required', 'date'],
@@ -26,6 +28,11 @@ class BalanceAnchorRequest extends FormRequest
                     BalanceAnchor::SOURCE_MANUAL,
                 ]),
             ],
+            'member_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('users', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
+            ],
         ];
     }
 
@@ -35,6 +42,7 @@ class BalanceAnchorRequest extends FormRequest
             'amount' => 'saldo',
             'as_of_date' => 'data',
             'source' => 'origem',
+            'member_id' => 'membro',
         ];
     }
 }

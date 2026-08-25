@@ -5,14 +5,18 @@ namespace App\Http\Controllers;
 use App\Http\Requests\TransactionRequest;
 use App\Models\BankAccount;
 use App\Models\Category;
+use App\Models\Company;
 use App\Models\PaymentCard;
 use App\Models\RecurringBill;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Services\CreditCardInvoiceService;
 use App\Services\CreditCardPaymentService;
 use App\Services\InstallmentPlanService;
 use App\Services\RecurringBillService;
 use App\Services\BalanceService;
+use App\Services\OwnershipResolver;
+use App\Services\ViewContext;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,7 +33,7 @@ class TransactionController extends Controller
         private readonly BalanceService $balances,
     ) {}
 
-    public function index(Request $request): Response
+    public function index(Request $request, ViewContext $view): Response
     {
         $this->authorize('viewAny', Transaction::class);
 
@@ -48,7 +52,9 @@ class TransactionController extends Controller
         $end = (clone $start)->endOfMonth();
 
         $filteredQuery = Transaction::query()
-            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->forViewContext($view)
+            ->whereDate('date', '>=', $start->toDateString())
+            ->whereDate('date', '<=', $end->toDateString())
             ->where(function ($q) {
                 $q->where('status', Transaction::STATUS_CONFIRMED)
                     ->orWhereNull('status');
@@ -78,6 +84,7 @@ class TransactionController extends Controller
             ->with([
                 'category:id,name,color',
                 'user:id,name',
+                'company:id,name,cnpj',
                 'paymentCard:id,name,brand,type,last_four,color',
                 'bankAccount:id,name,color',
                 'installmentPlan:id,description,total_amount,installments_count',
@@ -144,6 +151,7 @@ class TransactionController extends Controller
             'bankAccounts' => $this->bankAccountsForForm(),
             'pendingRecurring' => $this->pendingRecurringForForm(),
             'recurringBills' => $this->recurringBillsForForm(),
+            ...$this->ownershipFormProps($request),
         ]);
     }
 
@@ -157,6 +165,11 @@ class TransactionController extends Controller
             return $this->storeInvoicePayment($request, $data);
         }
 
+        $ownerId = OwnershipResolver::resolveOwnerId($request->user(), $data['user_id'] ?? null);
+        $isShared = (bool) ($data['is_shared'] ?? false);
+        $companyId = OwnershipResolver::resolveCompanyId($ownerId, $data['company_id'] ?? null, $isShared);
+        unset($data['user_id'], $data['is_shared'], $data['company_id']);
+
         if (! empty($data['is_installment'])) {
             $plan = $this->installmentPlanService->create($request->user(), [
                 'description' => $data['description'],
@@ -166,6 +179,10 @@ class TransactionController extends Controller
                 'installments_count' => $data['installments_count'],
                 'purchase_date' => $data['date'],
                 'first_installment_date' => $data['date'],
+                'user_id' => $ownerId,
+                'is_shared' => $isShared,
+                'company_id' => $companyId,
+                'created_by' => $request->user()->id,
             ]);
 
             return redirect()
@@ -220,6 +237,10 @@ class TransactionController extends Controller
             $this->recurringBillService->settleForBill($request->user(), $bill, [
                 ...$data,
                 'credit_card_invoice_id' => $data['credit_card_invoice_id'],
+                'user_id' => $ownerId,
+                'is_shared' => $isShared,
+                'company_id' => $companyId,
+                'created_by' => $request->user()->id,
             ]);
 
             return redirect()->route('transactions.index')->with('success', 'Transação vinculada à conta fixa.');
@@ -227,7 +248,10 @@ class TransactionController extends Controller
 
         Transaction::create([
             ...$data,
-            'user_id' => $request->user()->id,
+            'user_id' => $ownerId,
+            'is_shared' => $isShared,
+            'company_id' => $companyId,
+            'created_by' => $request->user()->id,
             'account_id' => $request->user()->account_id,
         ]);
 
@@ -277,6 +301,7 @@ class TransactionController extends Controller
             'bankAccounts' => $this->bankAccountsForForm(),
             'pendingRecurring' => $this->pendingRecurringForForm(),
             'recurringBills' => $this->recurringBillsForForm(),
+            ...$this->ownershipFormProps(request()),
         ]);
     }
 
@@ -286,12 +311,16 @@ class TransactionController extends Controller
 
         $data = $request->validated();
 
-        if ($transaction->type === Transaction::TYPE_TRANSFER || $data['type'] === Transaction::TYPE_TRANSFER) {
-            if ($transaction->type !== Transaction::TYPE_TRANSFER || $data['type'] !== Transaction::TYPE_TRANSFER) {
-                return back()->with('error', 'Não é possível alterar o tipo de um pagamento de fatura.');
+        if ($data['type'] === Transaction::TYPE_TRANSFER) {
+            if ($transaction->type === Transaction::TYPE_TRANSFER) {
+                return $this->updateInvoicePayment($request, $transaction, $data);
             }
 
-            return $this->updateInvoicePayment($request, $transaction, $data);
+            return $this->convertToInvoicePayment($request, $transaction, $data);
+        }
+
+        if ($transaction->type === Transaction::TYPE_TRANSFER) {
+            return back()->with('error', 'Não é possível alterar o tipo de um pagamento de fatura.');
         }
 
         if (! empty($data['is_installment'])) {
@@ -356,9 +385,65 @@ class TransactionController extends Controller
             ? BankAccount::query()->findOrFail($data['bank_account_id'])
             : null;
 
+        if (empty($data['credit_card_invoice_id'])) {
+            $resolved = $this->resolveInvoiceId([
+                ...$data,
+                'type' => Transaction::TYPE_EXPENSE,
+                'payment_method' => Transaction::PAYMENT_CARD,
+            ]);
+            if (! $resolved) {
+                return back()->withErrors([
+                    'credit_card_invoice_id' => 'Selecione a fatura a pagar.',
+                ]);
+            }
+            $data['credit_card_invoice_id'] = $resolved;
+        }
+
         $invoice = \App\Models\CreditCardInvoice::query()->findOrFail($data['credit_card_invoice_id']);
 
         $this->authorize('pay', $invoice);
+
+        $this->paymentService->pay(
+            $request->user(),
+            $invoice,
+            (float) $data['amount'],
+            $data['date'],
+            $data['payment_method'],
+            $bank,
+            $data['description'] ?? null
+        );
+
+        return redirect()->route('payment-cards.index')->with('success', 'Pagamento de fatura registrado.');
+    }
+
+    private function convertToInvoicePayment(
+        TransactionRequest $request,
+        Transaction $transaction,
+        array $data,
+    ): RedirectResponse {
+        $bank = ! empty($data['bank_account_id'])
+            ? BankAccount::query()->findOrFail($data['bank_account_id'])
+            : null;
+
+        if (empty($data['credit_card_invoice_id'])) {
+            $resolved = $this->resolveInvoiceId([
+                ...$data,
+                'type' => Transaction::TYPE_EXPENSE,
+                'payment_method' => Transaction::PAYMENT_CARD,
+            ]);
+            if (! $resolved) {
+                return back()->withErrors([
+                    'credit_card_invoice_id' => 'Selecione a fatura a pagar.',
+                ]);
+            }
+            $data['credit_card_invoice_id'] = $resolved;
+        }
+
+        $invoice = \App\Models\CreditCardInvoice::query()->findOrFail($data['credit_card_invoice_id']);
+        $this->authorize('pay', $invoice);
+
+        $this->balances->recordRetroactiveCashDeletion($transaction);
+        $transaction->delete();
 
         $this->paymentService->pay(
             $request->user(),
@@ -381,6 +466,20 @@ class TransactionController extends Controller
         $bank = ! empty($data['bank_account_id'])
             ? BankAccount::query()->findOrFail($data['bank_account_id'])
             : null;
+
+        if (empty($data['credit_card_invoice_id'])) {
+            $resolved = $this->resolveInvoiceId([
+                ...$data,
+                'type' => Transaction::TYPE_EXPENSE,
+                'payment_method' => Transaction::PAYMENT_CARD,
+            ]);
+            if (! $resolved) {
+                return back()->withErrors([
+                    'credit_card_invoice_id' => 'Selecione a fatura a pagar.',
+                ]);
+            }
+            $data['credit_card_invoice_id'] = $resolved;
+        }
 
         $invoice = \App\Models\CreditCardInvoice::query()->findOrFail($data['credit_card_invoice_id']);
 
@@ -415,6 +514,21 @@ class TransactionController extends Controller
         }
 
         return $this->invoiceService->resolveForPurchase($card, $data['date'])->id;
+    }
+
+    private function ownershipFormProps(Request $request): array
+    {
+        $user = $request->user();
+
+        return [
+            'members' => User::query()
+                ->where('account_id', $user->account_id)
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'companies' => Company::query()
+                ->orderBy('name')
+                ->get(['id', 'name', 'cnpj', 'user_id']),
+        ];
     }
 
     private function paymentCardsForForm()

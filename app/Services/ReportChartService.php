@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\PaymentCard;
 use App\Models\Transaction;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class ReportChartService
@@ -28,7 +29,7 @@ class ReportChartService
     ];
 
     /**
-     * Catálogo de gráficos disponíveis (fixos + UI).
+     * Catálogo de gráficos disponíveis (textos + UI).
      *
      * @return array<string, array{id: string, title: string, description: string, chart_type: string}>
      */
@@ -76,19 +77,20 @@ class ReportChartService
     /**
      * @return array{id: string, title: string, description: string, chart_type: string, series: array}|null
      */
-    public function build(string $chartId, int $month, int $year): ?array
+    public function build(string $chartId, int $month, int $year, ?ViewContext $view = null): ?array
     {
         if (! $this->isValidChartId($chartId)) {
             return null;
         }
 
+        $view ??= app(ViewContext::class);
         $meta = $this->catalog()[$chartId];
         $series = match ($chartId) {
-            self::CHART_BY_CATEGORY => $this->byCategory($month, $year),
-            self::CHART_MONTHLY_FLOW => $this->monthlyFlow($month, $year),
-            self::CHART_BY_MEMBER => $this->byMember($month, $year),
-            self::CHART_PAYMENT_MIX => $this->paymentMix($month, $year),
-            self::CHART_CASH_MOVEMENT => $this->cashMovement($month, $year),
+            self::CHART_BY_CATEGORY => $this->byCategory($month, $year, $view),
+            self::CHART_MONTHLY_FLOW => $this->monthlyFlow($month, $year, $view),
+            self::CHART_BY_MEMBER => $this->byMember($month, $year, $view),
+            self::CHART_PAYMENT_MIX => $this->paymentMix($month, $year, $view),
+            self::CHART_CASH_MOVEMENT => $this->cashMovement($month, $year, $view),
             default => [],
         };
 
@@ -101,11 +103,11 @@ class ReportChartService
     /**
      * @return list<array{name: string, color: string, total: float}>
      */
-    public function byCategory(int $month, int $year): array
+    public function byCategory(int $month, int $year, ?ViewContext $view = null): array
     {
         [$start, $end] = $this->monthRange($month, $year);
 
-        return Transaction::query()
+        return $this->transactions($view)
             ->select('category_id', DB::raw('SUM(amount) as total'))
             ->with('category:id,name,color')
             ->where('type', Transaction::TYPE_EXPENSE)
@@ -126,7 +128,7 @@ class ReportChartService
     /**
      * @return list<array{label: string, income: float, expense: float, investments: float}>
      */
-    public function monthlyFlow(int $month, int $year): array
+    public function monthlyFlow(int $month, int $year, ?ViewContext $view = null): array
     {
         $monthly = [];
 
@@ -134,19 +136,19 @@ class ReportChartService
             $period = Carbon::create($year, $month, 1)->subMonths($i);
             [$pStart, $pEnd] = $this->monthRange($period->month, $period->year);
 
-            $income = (float) Transaction::query()
+            $income = (float) $this->transactions($view)
                 ->where('type', Transaction::TYPE_INCOME)
                 ->where('status', Transaction::STATUS_CONFIRMED)
                 ->whereBetween('date', [$pStart, $pEnd])
                 ->sum('amount');
 
-            $expense = (float) Transaction::query()
+            $expense = (float) $this->transactions($view)
                 ->where('type', Transaction::TYPE_EXPENSE)
                 ->where('status', Transaction::STATUS_CONFIRMED)
                 ->whereBetween('date', [$pStart, $pEnd])
                 ->sum('amount');
 
-            $investments = (float) Transaction::query()
+            $investments = (float) $this->transactions($view)
                 ->where('type', Transaction::TYPE_INVESTMENT)
                 ->where('status', Transaction::STATUS_CONFIRMED)
                 ->whereBetween('date', [$pStart, $pEnd])
@@ -166,11 +168,11 @@ class ReportChartService
     /**
      * @return list<array{name: string, color: string, total: float}>
      */
-    public function byMember(int $month, int $year): array
+    public function byMember(int $month, int $year, ?ViewContext $view = null): array
     {
         [$start, $end] = $this->monthRange($month, $year);
 
-        return Transaction::query()
+        return $this->transactions($view)
             ->select('user_id', DB::raw('SUM(amount) as total'))
             ->with('user:id,name')
             ->where('type', Transaction::TYPE_EXPENSE)
@@ -191,11 +193,11 @@ class ReportChartService
     /**
      * @return list<array{name: string, color: string, total: float}>
      */
-    public function paymentMix(int $month, int $year): array
+    public function paymentMix(int $month, int $year, ?ViewContext $view = null): array
     {
         [$start, $end] = $this->monthRange($month, $year);
 
-        $confirmedExpenses = fn () => Transaction::query()
+        $confirmedExpenses = fn () => $this->transactions($view)
             ->where('type', Transaction::TYPE_EXPENSE)
             ->where('status', Transaction::STATUS_CONFIRMED)
             ->whereBetween('date', [$start, $end]);
@@ -245,7 +247,7 @@ class ReportChartService
      *
      * @return list<array{label: string, income: float, cash_expense: float, card_payments: float, investments: float}>
      */
-    public function cashMovement(int $month, int $year): array
+    public function cashMovement(int $month, int $year, ?ViewContext $view = null): array
     {
         $rows = [];
 
@@ -253,16 +255,16 @@ class ReportChartService
             $period = Carbon::create($year, $month, 1)->subMonths($i);
             [$pStart, $pEnd] = $this->monthRange($period->month, $period->year);
 
-            $income = (float) Transaction::query()
+            $income = (float) $this->transactions($view)
                 ->where('type', Transaction::TYPE_INCOME)
                 ->where('status', Transaction::STATUS_CONFIRMED)
                 ->whereBetween('date', [$pStart, $pEnd])
                 ->sum('amount');
 
-            $cashExpense = $this->cashExpenseTotal($pStart, $pEnd);
-            $cardPayments = $this->cardPaymentsTotal($pStart, $pEnd);
+            $cashExpense = $this->cashExpenseTotal($pStart, $pEnd, $view);
+            $cardPayments = $this->cardPaymentsTotal($pStart, $pEnd, $view);
 
-            $investments = (float) Transaction::query()
+            $investments = (float) $this->transactions($view)
                 ->where('type', Transaction::TYPE_INVESTMENT)
                 ->where('status', Transaction::STATUS_CONFIRMED)
                 ->whereBetween('date', [$pStart, $pEnd])
@@ -280,9 +282,9 @@ class ReportChartService
         return $rows;
     }
 
-    public function cardPaymentsTotal(string $start, string $end): float
+    public function cardPaymentsTotal(string $start, string $end, ?ViewContext $view = null): float
     {
-        return (float) Transaction::query()
+        return (float) $this->transactions($view)
             ->where('type', Transaction::TYPE_TRANSFER)
             ->whereNotNull('credit_card_invoice_id')
             ->where('status', Transaction::STATUS_CONFIRMED)
@@ -294,15 +296,15 @@ class ReportChartService
             ->sum('amount');
     }
 
-    public function cashExpenseTotal(string $start, string $end): float
+    public function cashExpenseTotal(string $start, string $end, ?ViewContext $view = null): float
     {
-        $expense = (float) Transaction::query()
+        $expense = (float) $this->transactions($view)
             ->where('type', Transaction::TYPE_EXPENSE)
             ->where('status', Transaction::STATUS_CONFIRMED)
             ->whereBetween('date', [$start, $end])
             ->sum('amount');
 
-        $credit = (float) Transaction::query()
+        $credit = (float) $this->transactions($view)
             ->where('type', Transaction::TYPE_EXPENSE)
             ->where('status', Transaction::STATUS_CONFIRMED)
             ->whereBetween('date', [$start, $end])
@@ -310,7 +312,7 @@ class ReportChartService
             ->whereHas('paymentCard', fn ($q) => $q->where('type', PaymentCard::TYPE_CREDIT))
             ->sum('amount');
 
-        $benefit = (float) Transaction::query()
+        $benefit = (float) $this->transactions($view)
             ->where('type', Transaction::TYPE_EXPENSE)
             ->where('status', Transaction::STATUS_CONFIRMED)
             ->whereBetween('date', [$start, $end])
@@ -319,6 +321,11 @@ class ReportChartService
             ->sum('amount');
 
         return round($expense - $credit - $benefit, 2);
+    }
+
+    protected function transactions(?ViewContext $view = null): Builder
+    {
+        return Transaction::query()->forViewContext($view ?? app(ViewContext::class));
     }
 
     /**

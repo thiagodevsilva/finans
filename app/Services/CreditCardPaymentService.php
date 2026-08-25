@@ -27,6 +27,14 @@ class CreditCardPaymentService
     ): Transaction {
         return DB::transaction(function () use ($user, $invoice, $amount, $date, $paymentMethod, $bankAccount) {
             $card = PaymentCard::query()->findOrFail($invoice->payment_card_id);
+
+            if (app()->bound(ViewContext::class)) {
+                $view = app(ViewContext::class);
+                if ($view->isPersonal() && $card->user_id !== $view->focusMemberId()) {
+                    abort(403, 'Este cartão não pertence à visão atual.');
+                }
+            }
+
             $category = $this->categoryService->ensureInvoicePaymentCategory(
                 $user->account
             );

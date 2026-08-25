@@ -7,9 +7,18 @@ alwaysApply: true
 
 ## Isolamento
 
-- Toda query de Category, Transaction, PaymentCard, BankAccount, BalanceAnchor, CreditCardInvoice, InstallmentPlan, RecurringBill, SupportTicket e listagem de User (membros) deve filtrar por `account_id` do usuário autenticado.
+- Toda query de Category, Transaction, PaymentCard, BankAccount, BalanceAnchor, CreditCardInvoice, InstallmentPlan, RecurringBill, Company, SupportTicket e listagem de User (membros) deve filtrar por `account_id` do usuário autenticado.
 - Use o trait `BelongsToAccount` / global scope. Nunca confie só no ID da URL.
+- Listagens e dashboard respeitam `ViewContext` (Família / Eu / Membro + filtro CNPJ) via `FiltersByViewContext` / `forViewContext`.
 - Admin (`is_admin`) vê todos os SupportTickets sem escopo de conta (painel `/admin/support`).
+
+## Visualização (ViewContext)
+
+- **Família**: todos os registros da conta (inclui `is_shared`); saldo = soma dos caixas dos membros.
+- **Eu / Membro**: só `user_id` do foco e `is_shared = false`; cartões/contas/faturas só desse membro.
+- Filtro CNPJ (visão pessoal): `all` | `none` | id da `companies`.
+- Owner pode alternar para ver por outro membro; dependent só Família ou Eu.
+- Preferência na sessão (`view_scope`, `view_member_id`, `view_company`).
 
 ## Papéis
 
@@ -17,10 +26,11 @@ alwaysApply: true
 |------|-------|-----------|
 | Ver transações da conta | sim | sim |
 | Criar transação | sim | sim |
+| Lançar em nome de outro membro | sim | não |
 | Editar/excluir qualquer transação | sim | não |
 | Editar/excluir própria transação | sim | sim |
 | CRUD categorias | sim | não (só listar) |
-| Ver cartões / faturas da conta | sim | sim |
+| Ver cartões / faturas (conforme ViewContext) | sim | sim |
 | Criar cartão / pagar fatura | sim | sim |
 | Editar/excluir qualquer cartão | sim | não |
 | Editar/excluir próprio cartão | sim | sim |
@@ -34,7 +44,10 @@ alwaysApply: true
 | Ver / criar conta fixa | sim | sim |
 | Editar/excluir qualquer conta fixa | sim | não |
 | Editar/excluir própria conta fixa | sim | sim |
-| Informar / atualizar saldo de caixa | sim | não (só visualizar) |
+| Informar / atualizar **próprio** saldo de caixa | sim | sim |
+| Informar / atualizar saldo de **outro** membro | sim | não |
+| CRUD CNPJs próprios | sim | sim |
+| CRUD CNPJ de outro membro | sim | não |
 | Adicionar/remover dependentes | sim | não |
 | Ver tickets de suporte da conta | sim | sim |
 | Abrir ticket / responder na thread | sim | sim |
@@ -51,9 +64,11 @@ alwaysApply: true
 - Cartão de crédito exige `closing_day` e `due_day`.
 - Cartão benefício não reduz caixa e não gera fatura/parcelas.
 - Contas fixas (`kind=fixed`) geram `planned`; só `confirmed` entra em dashboard/relatórios. Contas **variáveis** (`kind=variable`) não geram vencimento: vários gastos vinculados abatem a estimativa do mês e também ficam fora de Gastos.
-- **Saldo (caixa)** = âncora + entradas − saídas de dinheiro (PIX/dinheiro/transferência/débito/débito automático/fatura/investimento). Crédito não reduz até pagar a fatura.
-- **Saldo do mês** = income − saídas de dinheiro do mês − investment (confirmed). Crédito e cartão benefício não entram.
+- **Saldo (caixa)** = âncora **por membro** + entradas − saídas de dinheiro daquele `user_id`. Visão Família soma os caixas.
+- **Saldo do mês** = income − saídas de dinheiro do mês − investment (confirmed), filtrados pelo ViewContext.
 - Débito e débito automático saem do caixa.
+- `is_shared` (gasto/conta da família): só listado na visão Família; o caixa ainda debita o `user_id` pagador.
+- `company_id` (CNPJ): tag leve; shared ⇒ sem CNPJ.
 
 ## Conta
 

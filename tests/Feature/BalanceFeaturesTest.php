@@ -203,10 +203,10 @@ class BalanceFeaturesTest extends TestCase
             );
     }
 
-    public function test_dependent_cannot_create_balance_anchor(): void
+    public function test_dependent_can_create_own_balance_anchor_but_not_for_owner(): void
     {
         $account = Account::factory()->create();
-        User::factory()->owner()->create(['account_id' => $account->id]);
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
         $dependent = User::factory()->dependent()->create(['account_id' => $account->id]);
 
         $this->actingAs($dependent)
@@ -215,11 +215,22 @@ class BalanceFeaturesTest extends TestCase
                 'as_of_date' => now()->toDateString(),
                 'source' => BalanceAnchor::SOURCE_INITIAL,
             ])
-            ->assertForbidden();
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('balance_anchors', [
+            'user_id' => $dependent->id,
+            'amount' => 100,
+        ]);
 
         $this->actingAs($dependent)
-            ->post(route('balance-anchors.keep'))
-            ->assertForbidden();
+            ->from(route('dashboard'))
+            ->post(route('balance-anchors.store'), [
+                'amount' => 50,
+                'as_of_date' => now()->toDateString(),
+                'source' => BalanceAnchor::SOURCE_MANUAL,
+                'member_id' => $owner->id,
+            ])
+            ->assertSessionHasErrors('user_id');
     }
 
     public function test_balance_anchors_are_isolated_by_account(): void
@@ -443,7 +454,8 @@ class BalanceFeaturesTest extends TestCase
             ->assertRedirect();
 
         $account = \App\Models\Account::query()->find($account->id);
-        $this->assertNotNull($account->balance_stale_dismissed_at);
+        $owner->refresh();
+        $this->assertNotNull($owner->balance_stale_dismissed_at);
 
         $this->actingAs($owner)
             ->get(route('dashboard'))
@@ -551,8 +563,8 @@ class BalanceFeaturesTest extends TestCase
         $balances = app(\App\Services\BalanceService::class);
         $julyEnd = now()->copy()->startOfMonth()->subDay()->endOfDay();
 
-        $this->assertSame(1000.0, $balances->balanceAt($julyEnd));
-        $this->assertSame(850.0, $balances->effectiveBalanceAt($julyEnd));
+        $this->assertSame(1000.0, $balances->balanceAt($julyEnd, $owner));
+        $this->assertSame(850.0, $balances->effectiveBalanceAt($julyEnd, $owner));
     }
 
     public function test_stale_suggestion_includes_same_day_retroactive_entries_as_july_anchor(): void
@@ -664,9 +676,9 @@ class BalanceFeaturesTest extends TestCase
 
         $this->assertDatabaseMissing('transactions', ['id' => $expense->id]);
 
-        $account->refresh();
-        $this->assertSame(100.0, (float) $account->balance_stale_adjustment);
-        $this->assertNotNull($account->balance_stale_at);
+        $owner->refresh();
+        $this->assertSame(100.0, (float) $owner->balance_stale_adjustment);
+        $this->assertNotNull($owner->balance_stale_at);
 
         // Excluir saída embutida na âncora deve subir o saldo sugerido em R$ 100.
         $this->actingAs($owner)
@@ -722,13 +734,14 @@ class BalanceFeaturesTest extends TestCase
             ->assertRedirect();
 
         $account->refresh();
-        $this->assertNotNull($account->balance_stale_dismissed_at);
+        $owner->refresh();
+        $this->assertNotNull($owner->balance_stale_dismissed_at);
 
         $this->flushSession();
 
         $balances = app(\App\Services\BalanceService::class);
         $this->actingAs($owner);
-        $meta = $balances->staleRecalcMeta(now(), 1000.0);
+        $meta = $balances->staleRecalcMeta(now(), 1000.0, $owner);
         $this->assertFalse($meta['needs_stale_recalc']);
     }
 

@@ -50,6 +50,10 @@ const props = defineProps({
         type: Object,
         default: null,
     },
+    memberBalances: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const page = usePage();
@@ -68,6 +72,19 @@ const summary = computed(() =>
 const balanceMeta = computed(() =>
     showingDemo.value ? demoDashboardData.balanceMeta : props.balanceMeta,
 );
+const canManageBalance = computed(() => {
+    const focusId = balanceMeta.value?.focus_member_id;
+    if (!focusId || focusId === page.props.auth.user?.id) {
+        return true;
+    }
+    return isOwner.value;
+});
+
+/** Só força check-in/saldo inicial do próprio caixa — nunca ao ver outro membro. */
+const shouldAutoPromptBalance = computed(() => {
+    const focusId = balanceMeta.value?.focus_member_id;
+    return Boolean(focusId) && focusId === page.props.auth.user?.id;
+});
 const recurringSummary = computed(() =>
     showingDemo.value ? demoDashboardData.recurringSummary : props.recurringSummary,
 );
@@ -143,7 +160,7 @@ const spendTransactionsHref = (group) => route('transactions.index', {
 });
 
 const staleBannerBody = computed(() => {
-    if (!isOwner.value) {
+    if (!canManageBalance.value) {
         return 'Peça ao responsável da conta para atualizar a referência do saldo de caixa.';
     }
 
@@ -168,18 +185,27 @@ const openStaleRecalc = () => {
 };
 
 const dismissStaleRecalc = () => {
-    router.post(route('balance-anchors.dismiss-stale'), {}, { preserveScroll: true });
+    router.post(route('balance-anchors.dismiss-stale'), {
+        member_id: balanceMeta.value.focus_member_id || null,
+    }, { preserveScroll: true });
 };
 
 const closeBalanceModal = () => {
-    if (balanceModalMode.value === 'update') {
-        balanceModalMode.value = null;
-        balanceSuggestedAmount.value = null;
-    }
+    balanceModalMode.value = null;
+    balanceSuggestedAmount.value = null;
 };
 
 const syncBalanceModals = () => {
-    if (!isOwner.value || showingDemo.value || showWelcome.value) return;
+    if (!canManageBalance.value || showingDemo.value || showWelcome.value) return;
+
+    // Ao ver outro membro (ou CNPJ dele), não trava a tela pedindo saldo.
+    if (!shouldAutoPromptBalance.value) {
+        if (balanceModalMode.value === 'initial' || balanceModalMode.value === 'monthly') {
+            balanceModalMode.value = null;
+            balanceSuggestedAmount.value = null;
+        }
+        return;
+    }
 
     if (balanceMeta.value.needs_initial) {
         balanceModalMode.value = 'initial';
@@ -199,7 +225,12 @@ const syncBalanceModals = () => {
 };
 
 watch(
-    () => [balanceMeta.value.needs_initial, balanceMeta.value.needs_monthly_checkin, showWelcome.value],
+    () => [
+        balanceMeta.value.needs_initial,
+        balanceMeta.value.needs_monthly_checkin,
+        balanceMeta.value.focus_member_id,
+        showWelcome.value,
+    ],
     () => syncBalanceModals(),
     { immediate: true },
 );
@@ -291,7 +322,7 @@ onMounted(() => {
                         {{ staleBannerBody }}
                     </p>
                     <p
-                        v-if="isOwner && balanceMeta.suggested_balance != null"
+                        v-if="canManageBalance && balanceMeta.suggested_balance != null"
                         class="mt-2 text-sm text-horizon-600"
                     >
                         Sugestão:
@@ -300,7 +331,7 @@ onMounted(() => {
                         </span>
                     </p>
                 </div>
-                <div v-if="isOwner" class="flex shrink-0 flex-wrap gap-2">
+                <div v-if="canManageBalance" class="flex shrink-0 flex-wrap gap-2">
                     <SecondaryButton class="!px-3 !py-1.5 text-xs" type="button" @click="dismissStaleRecalc">
                         Agora não
                     </SecondaryButton>
@@ -334,7 +365,7 @@ onMounted(() => {
                             </span>
                         </p>
                         <SecondaryButton
-                            v-if="isOwner && !showingDemo"
+                            v-if="canManageBalance && !showingDemo"
                             class="mt-2 !px-2.5 !py-1 text-xs sm:hidden"
                             type="button"
                             @click="openUpdateBalance()"
@@ -344,7 +375,7 @@ onMounted(() => {
                     </div>
                     <div class="shrink-0 text-right">
                         <SecondaryButton
-                            v-if="isOwner && !showingDemo"
+                            v-if="canManageBalance && !showingDemo"
                             class="mb-2 hidden !px-2 !py-1 text-xs sm:inline-flex sm:!px-3 sm:!py-1.5 sm:text-sm"
                             type="button"
                             data-tour="dash-balance-update"
@@ -479,6 +510,8 @@ onMounted(() => {
             :mode="balanceModalMode || 'initial'"
             :previous-month-balance="balanceMeta.previous_month_balance"
             :suggested-amount="balanceSuggestedAmount"
+            :member-id="balanceMeta.focus_member_id || null"
+            :required="shouldAutoPromptBalance && (balanceModalMode === 'initial' || balanceModalMode === 'monthly')"
             @close="closeBalanceModal"
         />
     </AppLayout>

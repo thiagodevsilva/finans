@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\BalanceAnchor;
 use App\Models\BankAccount;
 use App\Models\Category;
+use App\Models\Company;
 use App\Models\CreditCardInvoice;
 use App\Models\InstallmentPlan;
 use App\Models\PaymentCard;
@@ -15,6 +16,7 @@ use App\Models\User;
 use App\Policies\BalanceAnchorPolicy;
 use App\Policies\BankAccountPolicy;
 use App\Policies\CategoryPolicy;
+use App\Policies\CompanyPolicy;
 use App\Policies\CreditCardInvoicePolicy;
 use App\Policies\InstallmentPlanPolicy;
 use App\Policies\MemberPolicy;
@@ -30,6 +32,7 @@ class AuthServiceProvider extends ServiceProvider
         BalanceAnchor::class => BalanceAnchorPolicy::class,
         BankAccount::class => BankAccountPolicy::class,
         Category::class => CategoryPolicy::class,
+        Company::class => CompanyPolicy::class,
         CreditCardInvoice::class => CreditCardInvoicePolicy::class,
         InstallmentPlan::class => InstallmentPlanPolicy::class,
         PaymentCard::class => PaymentCardPolicy::class,

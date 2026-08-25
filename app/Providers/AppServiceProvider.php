@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\Company;
 use App\Models\SupportTicket;
+use App\Services\ViewContext;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Route;
@@ -13,7 +15,9 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->bind(ViewContext::class, function ($app) {
+            return ViewContext::fromRequest($app['request']);
+        });
     }
 
     public function boot(): void
@@ -37,6 +41,10 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return $query->whereKey($value)->firstOrFail();
+        });
+
+        Route::bind('company', function (string $value) {
+            return Company::query()->whereKey($value)->firstOrFail();
         });
     }
 }

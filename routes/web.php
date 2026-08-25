@@ -5,6 +5,7 @@ use App\Http\Controllers\AdminSupportTicketController;
 use App\Http\Controllers\BalanceAnchorController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardPinnedChartController;
 use App\Http\Controllers\Email\UnsubscribeController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\RecurringBillController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\ViewContextController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -96,6 +98,8 @@ Route::middleware(['auth', 'last.seen'])->group(function () {
         Route::put('/dashboard/pinned-chart', [DashboardPinnedChartController::class, 'update'])
             ->name('dashboard.pinned-chart');
 
+        Route::put('/view-context', [ViewContextController::class, 'update'])->name('view-context.update');
+
         Route::post('/balance-anchors', [BalanceAnchorController::class, 'store'])->name('balance-anchors.store');
         Route::post('/balance-anchors/keep', [BalanceAnchorController::class, 'keep'])->name('balance-anchors.keep');
         Route::post('/balance-anchors/dismiss-stale', [BalanceAnchorController::class, 'dismissStale'])->name('balance-anchors.dismiss-stale');
@@ -131,6 +135,11 @@ Route::middleware(['auth', 'last.seen'])->group(function () {
             ->name('recurring-transactions.confirm');
         Route::post('/recurring-transactions/{transaction}/skip', [RecurringBillController::class, 'skip'])
             ->name('recurring-transactions.skip');
+
+        Route::get('/companies', [CompanyController::class, 'index'])->name('companies.index');
+        Route::post('/companies', [CompanyController::class, 'store'])->name('companies.store');
+        Route::put('/companies/{company}', [CompanyController::class, 'update'])->name('companies.update');
+        Route::delete('/companies/{company}', [CompanyController::class, 'destroy'])->name('companies.destroy');
 
         Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
         Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');

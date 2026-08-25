@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToAccount;
+use App\Models\Concerns\FiltersByViewContext;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RecurringBill extends Model
 {
-    use BelongsToAccount, HasFactory, HasUuids;
+    use BelongsToAccount, FiltersByViewContext, HasFactory, HasUuids;
 
     public const FREQUENCY_MONTHLY = 'monthly';
 
@@ -27,6 +28,9 @@ class RecurringBill extends Model
     protected $fillable = [
         'account_id',
         'user_id',
+        'is_shared',
+        'created_by',
+        'company_id',
         'category_id',
         'description',
         'kind',
@@ -46,6 +50,7 @@ class RecurringBill extends Model
         'start_date' => 'date',
         'end_date' => 'date',
         'active' => 'boolean',
+        'is_shared' => 'boolean',
     ];
 
     public function isVariable(): bool
@@ -66,6 +71,16 @@ class RecurringBill extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 
     public function category(): BelongsTo

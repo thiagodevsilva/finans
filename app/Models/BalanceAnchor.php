@@ -30,6 +30,7 @@ class BalanceAnchor extends Model
     protected $fillable = [
         'account_id',
         'user_id',
+        'created_by',
         'amount',
         'as_of_date',
         'source',
@@ -49,5 +50,10 @@ class BalanceAnchor extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

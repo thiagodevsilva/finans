@@ -10,6 +10,8 @@ use App\Models\PaymentCard;
 use App\Models\Transaction;
 use App\Services\CreditCardInvoiceService;
 use App\Services\CreditCardPaymentService;
+use App\Services\OwnershipResolver;
+use App\Services\ViewContext;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,13 +25,14 @@ class PaymentCardController extends Controller
         private readonly CreditCardPaymentService $paymentService
     ) {}
 
-    public function index(): Response
+    public function index(ViewContext $view): Response
     {
         $this->authorize('viewAny', PaymentCard::class);
 
         $user = auth()->user();
 
         $cards = PaymentCard::query()
+            ->forViewContext($view)
             ->with(['user:id,name', 'bankAccount:id,name,color'])
             ->orderBy('name')
             ->get()
@@ -52,12 +55,14 @@ class PaymentCardController extends Controller
                     'closing_day' => $card->closing_day,
                     'due_day' => $card->due_day,
                     'user_id' => $card->user_id,
+                    'company_id' => $card->company_id,
                     'user' => $card->user,
                     'can_edit' => $user->isOwner() || $card->user_id === $user->id,
                 ];
             });
 
         $recentPayments = Transaction::query()
+            ->forViewContext($view)
             ->with([
                 'paymentCard:id,name,brand,type,last_four,color',
                 'bankAccount:id,name',
@@ -80,7 +85,10 @@ class PaymentCardController extends Controller
         return Inertia::render('PaymentCards/Index', [
             'cards' => $cards,
             'recentPayments' => $recentPayments,
-            'bankAccounts' => BankAccount::query()->orderBy('name')->get(['id', 'name', 'color']),
+            'bankAccounts' => BankAccount::query()
+                ->forViewContext($view)
+                ->orderBy('name')
+                ->get(['id', 'name', 'color']),
             'brands' => collect(PaymentCard::BRANDS)->map(fn ($brand) => [
                 'value' => $brand,
                 'label' => PaymentCard::brandLabel($brand),
@@ -92,7 +100,7 @@ class PaymentCardController extends Controller
         ]);
     }
 
-    public function payments(Request $request): Response
+    public function payments(Request $request, ViewContext $view): Response
     {
         $this->authorize('viewAny', PaymentCard::class);
 
@@ -104,6 +112,7 @@ class PaymentCardController extends Controller
         $end = (clone $start)->endOfMonth();
 
         $payments = Transaction::query()
+            ->forViewContext($view)
             ->with([
                 'paymentCard:id,name,brand,type,last_four,color',
                 'bankAccount:id,name',
@@ -128,6 +137,7 @@ class PaymentCardController extends Controller
         return Inertia::render('PaymentCards/Payments', [
             'payments' => $payments,
             'cards' => PaymentCard::query()
+                ->forViewContext($view)
                 ->where('type', PaymentCard::TYPE_CREDIT)
                 ->orderBy('name')
                 ->get(['id', 'name', 'brand', 'type', 'last_four', 'color']),
@@ -143,9 +153,15 @@ class PaymentCardController extends Controller
     {
         $this->authorize('create', PaymentCard::class);
 
+        $data = $request->validated();
+        $ownerId = OwnershipResolver::resolveOwnerId($request->user(), $data['user_id'] ?? null);
+        $companyId = OwnershipResolver::resolveCompanyId($ownerId, $data['company_id'] ?? null);
+        unset($data['user_id'], $data['company_id']);
+
         $card = PaymentCard::create([
-            ...$request->validated(),
-            'user_id' => $request->user()->id,
+            ...$data,
+            'user_id' => $ownerId,
+            'company_id' => $companyId,
             'account_id' => $request->user()->account_id,
         ]);
 
@@ -160,7 +176,9 @@ class PaymentCardController extends Controller
     {
         $this->authorize('update', $paymentCard);
 
-        $paymentCard->update($request->validated());
+        $data = $request->validated();
+        unset($data['user_id'], $data['company_id']);
+        $paymentCard->update($data);
 
         if ($paymentCard->type === PaymentCard::TYPE_CREDIT) {
             $this->invoiceService->ensureUpcomingInvoices($paymentCard->fresh());

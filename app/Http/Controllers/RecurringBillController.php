@@ -9,7 +9,9 @@ use App\Models\Category;
 use App\Models\PaymentCard;
 use App\Models\RecurringBill;
 use App\Models\Transaction;
+use App\Services\OwnershipResolver;
 use App\Services\RecurringBillService;
+use App\Services\ViewContext;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -20,21 +22,23 @@ class RecurringBillController extends Controller
         private readonly RecurringBillService $service
     ) {}
 
-    public function index(): Response
+    public function index(ViewContext $view): Response
     {
         $this->authorize('viewAny', RecurringBill::class);
 
         $user = auth()->user();
 
         RecurringBill::query()
+            ->forViewContext($view)
             ->where('active', true)
             ->get()
             ->each(fn (RecurringBill $bill) => $this->service->materializeAhead($bill, 3));
 
-        $monthSummary = $this->service->summarizeMonth(now());
+        $monthSummary = $this->service->summarizeMonth(now(), $view);
         $paidByBill = $monthSummary['paid_by_bill'];
 
         $bills = RecurringBill::query()
+            ->forViewContext($view)
             ->with(['category:id,name,color', 'user:id,name', 'paymentCard:id,name,color', 'bankAccount:id,name,color'])
             ->where('active', true)
             ->orderByRaw('day_of_month is null')
@@ -65,6 +69,8 @@ class RecurringBillController extends Controller
                     'end_date' => $bill->end_date?->toDateString(),
                     'active' => $bill->active,
                     'user_id' => $bill->user_id,
+                    'is_shared' => (bool) $bill->is_shared,
+                    'company_id' => $bill->company_id,
                     'user' => $bill->user,
                     'can_edit' => $user->isOwner() || $bill->user_id === $user->id,
                     'month_paid' => $monthPaid,
@@ -88,6 +94,7 @@ class RecurringBillController extends Controller
 
         // Só contas fixas (com vencimento) entram em próximos / a pagar.
         $upcoming = Transaction::query()
+            ->forViewContext($view)
             ->with(['category:id,name,color', 'recurringBill:id,description,kind'])
             ->whereNotNull('recurring_bill_id')
             ->where('status', Transaction::STATUS_PLANNED)
@@ -104,6 +111,7 @@ class RecurringBillController extends Controller
             ->map($mapScheduleItem);
 
         $paid = Transaction::query()
+            ->forViewContext($view)
             ->with(['category:id,name,color', 'recurringBill:id,description,kind'])
             ->whereNotNull('recurring_bill_id')
             ->where('status', Transaction::STATUS_CONFIRMED)
@@ -167,8 +175,14 @@ class RecurringBillController extends Controller
             'paid' => $paid,
             'periodSummary' => $periodSummary,
             'categories' => Category::query()->orderBy('name')->get(['id', 'name', 'color']),
-            'paymentCards' => PaymentCard::query()->orderBy('name')->get(['id', 'name', 'brand', 'type', 'last_four', 'color']),
-            'bankAccounts' => BankAccount::query()->orderBy('name')->get(['id', 'name', 'color']),
+            'paymentCards' => PaymentCard::query()
+                ->forViewContext($view)
+                ->orderBy('name')
+                ->get(['id', 'name', 'brand', 'type', 'last_four', 'color']),
+            'bankAccounts' => BankAccount::query()
+                ->forViewContext($view)
+                ->orderBy('name')
+                ->get(['id', 'name', 'color']),
         ]);
     }
 
@@ -176,7 +190,19 @@ class RecurringBillController extends Controller
     {
         $this->authorize('create', RecurringBill::class);
 
-        $this->service->create($request->user(), $request->validated());
+        $data = $request->validated();
+        $ownerId = OwnershipResolver::resolveOwnerId($request->user(), $data['user_id'] ?? null);
+        $isShared = (bool) ($data['is_shared'] ?? false);
+        $companyId = OwnershipResolver::resolveCompanyId($ownerId, $data['company_id'] ?? null, $isShared);
+        unset($data['user_id'], $data['is_shared'], $data['company_id']);
+
+        $this->service->create($request->user(), [
+            ...$data,
+            'user_id' => $ownerId,
+            'is_shared' => $isShared,
+            'company_id' => $companyId,
+            'created_by' => $request->user()->id,
+        ]);
 
         return back()->with('success', 'Conta fixa cadastrada.');
     }
@@ -188,7 +214,7 @@ class RecurringBillController extends Controller
         $data = $request->validated();
         $propagate = $data['propagate'] ?? 'none';
         $propagateFrom = $data['propagate_from'] ?? null;
-        unset($data['propagate'], $data['propagate_from']);
+        unset($data['propagate'], $data['propagate_from'], $data['user_id'], $data['is_shared'], $data['company_id']);
 
         if (($data['kind'] ?? null) === RecurringBill::KIND_VARIABLE) {
             $data['day_of_month'] = null;

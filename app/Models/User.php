@@ -38,6 +38,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'onboarding_status',
         'pinned_dashboard_chart',
         'marketing_emails_opted_in',
+        'balance_stale_at',
+        'balance_stale_adjustment',
+        'balance_stale_dismissed_at',
     ];
 
     protected $hidden = [
@@ -52,6 +55,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'last_seen_at' => 'datetime',
         'marketing_emails_opted_in' => 'boolean',
         'marketing_unsubscribed_at' => 'datetime',
+        'balance_stale_at' => 'datetime',
+        'balance_stale_adjustment' => 'decimal:2',
+        'balance_stale_dismissed_at' => 'datetime',
     ];
 
     protected $appends = [
@@ -70,6 +76,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    public function companies(): HasMany
+    {
+        return $this->hasMany(Company::class);
     }
 
     public function isOwner(): bool

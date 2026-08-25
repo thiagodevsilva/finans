@@ -35,7 +35,29 @@ class InstallmentPlanRequest extends FormRequest
             'installments_count' => ['required', 'integer', 'min:2', 'max:48'],
             'purchase_date' => ['required', 'date'],
             'first_installment_date' => ['required', 'date'],
+            'user_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('users', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
+            ],
+            'is_shared' => ['sometimes', 'boolean'],
+            'company_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('companies', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
+            ],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'is_shared' => $this->boolean('is_shared'),
+        ]);
+
+        if ($this->boolean('is_shared')) {
+            $this->merge(['company_id' => null]);
+        }
     }
 
     public function attributes(): array
@@ -48,6 +70,9 @@ class InstallmentPlanRequest extends FormRequest
             'installments_count' => 'número de parcelas',
             'purchase_date' => 'data da compra',
             'first_installment_date' => 'data da 1ª parcela',
+            'user_id' => 'membro',
+            'is_shared' => 'compartilhado',
+            'company_id' => 'CNPJ',
         ];
     }
 }

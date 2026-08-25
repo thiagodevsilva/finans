@@ -14,11 +14,15 @@ class BalanceAnchorPolicy
 
     public function create(User $user): bool
     {
-        return $user->isOwner();
+        return $user->account_id !== null;
     }
 
     public function update(User $user, BalanceAnchor $anchor): bool
     {
-        return $user->isOwner() && $user->account_id === $anchor->account_id;
+        if ($user->account_id !== $anchor->account_id) {
+            return false;
+        }
+
+        return $user->isOwner() || $anchor->user_id === $user->id;
     }
 }

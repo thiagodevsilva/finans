@@ -58,6 +58,17 @@ class RecurringBillRequest extends FormRequest
                 'nullable',
                 'date',
             ],
+            'user_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('users', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
+            ],
+            'is_shared' => ['sometimes', 'boolean'],
+            'company_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('companies', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
+            ],
         ];
     }
 
@@ -79,6 +90,7 @@ class RecurringBillRequest extends FormRequest
 
         $this->merge([
             'kind' => $kind,
+            'is_shared' => $this->boolean('is_shared'),
             'day_of_month' => $kind === RecurringBill::KIND_VARIABLE
                 ? null
                 : $this->input('day_of_month'),
@@ -90,6 +102,10 @@ class RecurringBillRequest extends FormRequest
             'propagate' => $this->input('propagate', 'none'),
             'propagate_from' => $this->filled('propagate_from') ? $this->input('propagate_from') : null,
         ]);
+
+        if ($this->boolean('is_shared')) {
+            $this->merge(['company_id' => null]);
+        }
     }
 
     public function attributes(): array
@@ -107,6 +123,9 @@ class RecurringBillRequest extends FormRequest
             'end_date' => 'fim',
             'propagate' => 'atualizar lançamentos',
             'propagate_from' => 'a partir da data',
+            'user_id' => 'membro',
+            'is_shared' => 'compartilhado',
+            'company_id' => 'CNPJ',
         ];
     }
 }

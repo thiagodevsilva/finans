@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToAccount;
+use App\Models\Concerns\FiltersByViewContext;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PaymentCard extends Model
 {
-    use BelongsToAccount, HasFactory, HasUuids;
+    use BelongsToAccount, FiltersByViewContext, HasFactory, HasUuids;
 
     public const BRAND_VISA = 'visa';
 
@@ -46,6 +47,7 @@ class PaymentCard extends Model
     protected $fillable = [
         'account_id',
         'user_id',
+        'company_id',
         'bank_account_id',
         'name',
         'brand',
@@ -56,6 +58,11 @@ class PaymentCard extends Model
         'due_day',
     ];
 
+    protected function viewContextHasShared(): bool
+    {
+        return false;
+    }
+
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
@@ -64,6 +71,11 @@ class PaymentCard extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 
     public function bankAccount(): BelongsTo

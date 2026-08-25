@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToAccount;
+use App\Models\Concerns\FiltersByViewContext;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Transaction extends Model
 {
-    use BelongsToAccount, HasFactory, HasUuids;
+    use BelongsToAccount, FiltersByViewContext, HasFactory, HasUuids;
 
     public const TYPE_INCOME = 'income';
 
@@ -79,6 +80,9 @@ class Transaction extends Model
     protected $fillable = [
         'account_id',
         'user_id',
+        'is_shared',
+        'created_by',
+        'company_id',
         'category_id',
         'type',
         'amount',
@@ -97,6 +101,7 @@ class Transaction extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'date' => 'date',
+        'is_shared' => 'boolean',
     ];
 
     public function account(): BelongsTo
@@ -107,6 +112,16 @@ class Transaction extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 
     public function category(): BelongsTo

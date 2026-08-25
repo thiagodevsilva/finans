@@ -2,6 +2,7 @@
 import AppMark from '@/Components/AppMark.vue';
 import SupportNoticeModal from '@/Components/SupportNoticeModal.vue';
 import TourHelpButton from '@/Components/TourHelpButton.vue';
+import ViewContextSwitcher from '@/Components/ViewContextSwitcher.vue';
 import { useAppTour } from '@/Composables/useAppTour';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
@@ -12,7 +13,6 @@ const EMAIL_VERIFY_DISMISS_KEY = 'levita.email.verify.dismissed';
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
-const account = computed(() => page.props.auth.account);
 const flash = computed(() => page.props.flash);
 const mobileOpen = ref(false);
 const showSupportNotice = ref(false);
@@ -30,6 +30,7 @@ const links = [
     { name: 'Contas fixas', route: 'recurring-bills.index', match: 'recurring-bills.*' },
     { name: 'Contas', route: 'bank-accounts.index', match: 'bank-accounts.*', tour: 'nav-bank-accounts' },
     { name: 'Cartões', route: 'payment-cards.index', match: 'payment-cards.*', tour: 'nav-payment-cards' },
+    { name: 'CNPJs', route: 'companies.index', match: 'companies.*' },
     { name: 'Categorias', route: 'categories.index', match: 'categories.*' },
     { name: 'Dependentes', route: 'members.index', match: 'members.*' },
     { name: 'Relatórios', route: 'reports.index', match: 'reports.*' },
@@ -123,8 +124,10 @@ onUnmounted(() => {
                 </Link>
                 <button type="button" class="text-[0.9625rem] text-horizon-500 xl:hidden" @click="mobileOpen = false">✕</button>
             </div>
-            <p class="mx-8 mt-1 truncate text-[0.9625rem] text-horizon-500">{{ account?.name }}</p>
-            <div class="mb-6 mt-8 h-px bg-horizon-200" />
+            <div class="mx-8 mt-3">
+                <ViewContextSwitcher />
+            </div>
+            <div class="mb-6 mt-6 h-px bg-horizon-200" />
 
             <nav class="mb-auto pt-1">
                 <Link

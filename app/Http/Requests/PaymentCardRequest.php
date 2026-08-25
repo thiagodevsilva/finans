@@ -44,6 +44,16 @@ class PaymentCardRequest extends FormRequest
                 'min:1',
                 'max:31',
             ],
+            'user_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('users', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
+            ],
+            'company_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('companies', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
+            ],
         ];
     }
 
@@ -89,6 +99,8 @@ class PaymentCardRequest extends FormRequest
             'bank_account_id' => 'conta',
             'closing_day' => 'dia de fechamento',
             'due_day' => 'dia de vencimento',
+            'user_id' => 'membro',
+            'company_id' => 'CNPJ',
         ];
     }
 }

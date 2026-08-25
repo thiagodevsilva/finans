@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToAccount;
+use App\Models\Concerns\FiltersByViewContext;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,14 +12,20 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class BankAccount extends Model
 {
-    use BelongsToAccount, HasFactory, HasUuids;
+    use BelongsToAccount, FiltersByViewContext, HasFactory, HasUuids;
 
     protected $fillable = [
         'account_id',
         'user_id',
+        'company_id',
         'name',
         'color',
     ];
+
+    protected function viewContextHasShared(): bool
+    {
+        return false;
+    }
 
     public function account(): BelongsTo
     {
@@ -28,6 +35,11 @@ class BankAccount extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 
     public function transactions(): HasMany

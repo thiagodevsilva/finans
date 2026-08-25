@@ -2,6 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Company;
+use App\Models\User;
+use App\Services\ViewContext;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -20,6 +23,42 @@ class HandleInertiaRequests extends Middleware
 
         if ($user) {
             $user->loadMissing('account');
+        }
+
+        $viewContext = null;
+        $viewMembers = [];
+        $viewCompanies = [];
+
+        if ($user && $user->account_id) {
+            $ctx = app(ViewContext::class);
+            $viewContext = $ctx->toArray();
+
+            $viewMembers = User::query()
+                ->where('account_id', $user->account_id)
+                ->orderBy('name')
+                ->get(['id', 'name', 'role'])
+                ->map(fn (User $m) => [
+                    'id' => $m->id,
+                    'name' => $m->name,
+                    'role' => $m->role,
+                    'is_owner' => $m->isOwner(),
+                ])
+                ->values()
+                ->all();
+
+            $focusId = $ctx->focusMemberId() ?? $user->id;
+            $viewCompanies = Company::query()
+                ->where('user_id', $focusId)
+                ->orderBy('name')
+                ->get(['id', 'name', 'cnpj'])
+                ->map(fn (Company $c) => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'cnpj' => $c->cnpj,
+                    'cnpj_formatted' => $c->formattedCnpj(),
+                ])
+                ->values()
+                ->all();
         }
 
         return [
@@ -48,6 +87,9 @@ class HandleInertiaRequests extends Middleware
                     'name' => $user->account->name,
                 ] : null,
             ],
+            'viewContext' => $viewContext,
+            'viewMembers' => $viewMembers,
+            'viewCompanies' => $viewCompanies,
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
@@ -56,9 +98,6 @@ class HandleInertiaRequests extends Middleware
         ];
     }
 
-    /**
-     * Muda a cada build Vite ou alteração em /public/images — usado em ?v= das imagens.
-     */
     private function assetVersion(): string
     {
         $parts = [];
