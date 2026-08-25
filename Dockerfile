@@ -1,12 +1,5 @@
 FROM php:8.3-cli-bookworm AS vendor
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        git \
-        unzip \
-        libzip-dev \
-    && docker-php-ext-install zip \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
@@ -38,23 +31,17 @@ COPY public ./public
 RUN npm run build
 
 
-FROM php:8.3-fpm-bookworm
+# Extensões PHP em stage separado: muda raramente e fica em cache no VPS.
+FROM php:8.3-fpm-bookworm AS php-base
+
+COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx \
         supervisor \
-        git \
-        unzip \
         curl \
-        libzip-dev \
-        libpng-dev \
-        libjpeg62-turbo-dev \
-        libfreetype6-dev \
-        libonig-dev \
-        libxml2-dev \
-        libicu-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
+        unzip \
+    && install-php-extensions \
         pdo_mysql \
         mbstring \
         exif \
@@ -68,6 +55,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -f /etc/nginx/sites-enabled/default
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+
+FROM php-base
 
 WORKDIR /var/www/html
 
