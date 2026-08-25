@@ -1,5 +1,11 @@
 FROM php:8.3-cli-bookworm AS vendor
 
+# unzip basta pro Composer baixar packs; evita compilar ext-zip neste stage.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        unzip \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
