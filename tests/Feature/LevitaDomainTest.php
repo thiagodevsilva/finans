@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\BankAccount;
 use App\Models\Category;
 use App\Models\PaymentCard;
+use App\Models\RecurringBill;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Providers\RouteServiceProvider;
@@ -595,6 +596,137 @@ class LevitaDomainTest extends TestCase
                 ->where('transactions.data.1.id', $pix->id)
                 ->where('filterSummary.count', 2)
                 ->where('filterSummary.signed_total', -70)
+            );
+    }
+
+    public function test_spend_group_filter_matches_dashboard_totals(): void
+    {
+        $this->travelTo('2026-08-20');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $creditCard = PaymentCard::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'Nubank',
+            'brand' => 'visa',
+            'type' => PaymentCard::TYPE_CREDIT,
+            'last_four' => '1111',
+            'color' => '#820ad1',
+            'closing_day' => 10,
+            'due_day' => 17,
+        ]);
+        $benefitCard = PaymentCard::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'VR',
+            'brand' => 'other',
+            'type' => PaymentCard::TYPE_BENEFIT,
+            'last_four' => '2222',
+            'color' => '#16a34a',
+        ]);
+
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 100,
+            'description' => 'Crédito loja',
+            'date' => '2026-08-05',
+            'payment_method' => Transaction::PAYMENT_CARD,
+            'payment_card_id' => $creditCard->id,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 40,
+            'description' => 'PIX mercado',
+            'date' => '2026-08-06',
+            'payment_method' => Transaction::PAYMENT_PIX,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 25,
+            'description' => 'VR almoço',
+            'date' => '2026-08-07',
+            'payment_method' => Transaction::PAYMENT_CARD,
+            'payment_card_id' => $benefitCard->id,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $bill = RecurringBill::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'description' => 'Aluguel',
+            'estimated_amount' => 1400,
+            'day_of_month' => 8,
+            'payment_method' => Transaction::PAYMENT_PIX,
+            'start_date' => '2026-01-01',
+            'active' => true,
+        ]);
+
+        Transaction::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'category_id' => $category->id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => 1400,
+            'description' => 'Aluguel fixo',
+            'date' => '2026-08-08',
+            'payment_method' => Transaction::PAYMENT_PIX,
+            'recurring_bill_id' => $bill->id,
+            'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 8, 'year' => 2026]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('summary.expense_credit', 100)
+                ->where('summary.expense_debit', 40)
+                ->where('summary.expense_spend', 140)
+            );
+
+        $this->actingAs($owner)
+            ->get(route('transactions.index', [
+                'month' => 8,
+                'year' => 2026,
+                'spend_group' => 'credit',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('filters.spend_group', 'credit')
+                ->where('filters.type', 'expense')
+                ->has('transactions.data', 1)
+                ->where('transactions.data.0.description', 'Crédito loja')
+                ->where('filterSummary.count', 1)
+                ->where('filterSummary.signed_total', -100)
+            );
+
+        $this->actingAs($owner)
+            ->get(route('transactions.index', [
+                'month' => 8,
+                'year' => 2026,
+                'spend_group' => 'debit',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('filters.spend_group', 'debit')
+                ->has('transactions.data', 1)
+                ->where('transactions.data.0.description', 'PIX mercado')
+                ->where('filterSummary.count', 1)
+                ->where('filterSummary.signed_total', -40)
             );
     }
 }

@@ -126,11 +126,14 @@ onUnmounted(() => {
 const currentFilters = (form) => ({
     month: form.month.value,
     year: form.year.value,
-    type: form.type.value || undefined,
+    type: form.spend_group?.value
+        ? 'expense'
+        : (form.type.value || undefined),
     category_id: form.category_id.value || undefined,
     payment_methods: selectedPaymentMethods.value.length
         ? selectedPaymentMethods.value
         : undefined,
+    spend_group: form.spend_group?.value || undefined,
 });
 
 const applyFilters = (event) => {
@@ -165,6 +168,26 @@ const togglePaymentMethod = (value) => {
 const clearPaymentMethods = () => {
     selectedPaymentMethods.value = [];
     applyPaymentFilters();
+};
+
+const spendGroupLabel = computed(() => {
+    if (props.filters.spend_group === 'credit') return 'gastos no crédito';
+    if (props.filters.spend_group === 'debit') return 'gastos no débito';
+    return null;
+});
+
+const clearSpendGroup = () => {
+    const form = document.querySelector('[data-tour="tx-filters"]');
+    if (!form) return;
+    router.get(route('transactions.index'), {
+        month: form.month.value,
+        year: form.year.value,
+        type: form.type.value || undefined,
+        category_id: form.category_id.value || undefined,
+        payment_methods: selectedPaymentMethods.value.length
+            ? selectedPaymentMethods.value
+            : undefined,
+    }, { preserveState: true });
 };
 
 const canEdit = (tx) => {
@@ -222,6 +245,16 @@ const destroy = (tx) => {
                 <option value="investment">Investimentos</option>
                 <option value="transfer">Pagamentos de fatura</option>
             </select>
+            <select
+                name="spend_group"
+                class="rounded-xl border-horizon-200 text-sm text-navy-700"
+                :class="filters.spend_group ? 'border-cta/40 bg-cta/5 font-medium text-cta' : ''"
+                :value="filters.spend_group || ''"
+            >
+                <option value="">Filtrar gasto</option>
+                <option value="credit">Crédito</option>
+                <option value="debit">Débito</option>
+            </select>
             <select name="category_id" class="rounded-xl border-horizon-200 text-sm text-navy-700" :value="filters.category_id || ''">
                 <option value="">Todas as categorias</option>
                 <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
@@ -267,6 +300,26 @@ const destroy = (tx) => {
                 </div>
             </div>
         </form>
+
+        <div
+            v-if="spendGroupLabel"
+            class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[16px] border border-cta/20 bg-cta/5 px-4 py-3"
+            data-tour="tx-spend-group-banner"
+        >
+            <p class="text-sm text-navy-700">
+                Filtrado:
+                <span class="font-semibold">{{ spendGroupLabel }}</span>
+                ({{ MONTHS.find((m) => m.value === Number(filters.month))?.label || filters.month }}/{{ filters.year }})
+                — mesmos critérios do dashboard
+            </p>
+            <button
+                type="button"
+                class="text-xs font-semibold text-cta hover:underline"
+                @click="clearSpendGroup"
+            >
+                Limpar filtro
+            </button>
+        </div>
 
         <div
             v-if="summaryCount > 0"

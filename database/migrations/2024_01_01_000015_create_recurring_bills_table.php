@@ -14,8 +14,9 @@ return new class extends Migration
             $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
             $table->foreignUuid('category_id')->constrained('categories')->cascadeOnDelete();
             $table->string('description');
+            $table->string('kind')->default('fixed');
             $table->decimal('estimated_amount', 12, 2);
-            $table->unsignedTinyInteger('day_of_month');
+            $table->unsignedTinyInteger('day_of_month')->nullable();
             $table->string('frequency')->default('monthly');
             $table->string('payment_method')->nullable();
             $table->foreignUuid('payment_card_id')->nullable()->constrained('payment_cards')->nullOnDelete();

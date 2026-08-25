@@ -18,13 +18,18 @@ class RecurringBillService
     public function create(User $user, array $data): RecurringBill
     {
         return DB::transaction(function () use ($user, $data) {
+            $kind = $data['kind'] ?? RecurringBill::KIND_FIXED;
+
             $bill = RecurringBill::create([
                 'account_id' => $user->account_id,
                 'user_id' => $user->id,
                 'category_id' => $data['category_id'],
                 'description' => $data['description'],
+                'kind' => $kind,
                 'estimated_amount' => $data['estimated_amount'],
-                'day_of_month' => $data['day_of_month'],
+                'day_of_month' => $kind === RecurringBill::KIND_VARIABLE
+                    ? null
+                    : $data['day_of_month'],
                 'frequency' => RecurringBill::FREQUENCY_MONTHLY,
                 'payment_method' => $data['payment_method'] ?? null,
                 'payment_card_id' => $data['payment_card_id'] ?? null,
@@ -42,7 +47,11 @@ class RecurringBillService
 
     public function materializeAhead(RecurringBill $bill, int $monthsAhead = 3): void
     {
-        if (! $bill->active) {
+        if (! $bill->active || $bill->isVariable()) {
+            return;
+        }
+
+        if (! $bill->day_of_month) {
             return;
         }
 
@@ -81,6 +90,113 @@ class RecurringBillService
 
             $cursor->addMonthNoOverflow();
         }
+    }
+
+    /**
+     * Remove planned abertos ao tornar a conta variável.
+     */
+    public function clearPlannedForBill(RecurringBill $bill): int
+    {
+        return Transaction::query()
+            ->where('recurring_bill_id', $bill->id)
+            ->where('status', Transaction::STATUS_PLANNED)
+            ->delete();
+    }
+
+    /**
+     * Progresso do mês: fixas (confirmed + planned) + variáveis (estimativa / pagos).
+     *
+     * @return array{
+     *     paid_amount: float,
+     *     pending_amount: float,
+     *     total_amount: float,
+     *     paid_count: int,
+     *     pending_count: int,
+     *     total_count: int,
+     *     paid_percent: int,
+     *     paid_by_bill: array<string, float>
+     * }
+     */
+    public function summarizeMonth(?Carbon $at = null): array
+    {
+        $start = ($at ?? now())->copy()->startOfMonth();
+        $end = $start->copy()->endOfMonth();
+        $range = [$start->toDateString(), $end->toDateString()];
+
+        $confirmed = Transaction::query()
+            ->whereNotNull('recurring_bill_id')
+            ->where('status', Transaction::STATUS_CONFIRMED)
+            ->whereBetween('date', $range)
+            ->get(['id', 'amount', 'recurring_bill_id']);
+
+        $planned = Transaction::query()
+            ->whereNotNull('recurring_bill_id')
+            ->where('status', Transaction::STATUS_PLANNED)
+            ->whereBetween('date', $range)
+            ->get(['id', 'amount', 'recurring_bill_id']);
+
+        $paidAmount = round((float) $confirmed->sum('amount'), 2);
+        $paidCount = $confirmed->count();
+        $plannedAmount = round((float) $planned->sum('amount'), 2);
+        $plannedCount = $planned->count();
+
+        $paidByBill = $confirmed
+            ->groupBy('recurring_bill_id')
+            ->map(fn ($rows) => round((float) $rows->sum('amount'), 2))
+            ->all();
+
+        $variableBills = RecurringBill::query()
+            ->where('kind', RecurringBill::KIND_VARIABLE)
+            ->where('active', true)
+            ->whereDate('start_date', '<=', $end->toDateString())
+            ->where(function ($q) use ($start) {
+                $q->whereNull('end_date')
+                    ->orWhereDate('end_date', '>=', $start->toDateString());
+            })
+            ->get(['id', 'estimated_amount']);
+
+        $variableEstimateTotal = 0.0;
+        $variablePendingTotal = 0.0;
+        $variablePendingCount = 0;
+        $variableBillIds = [];
+
+        foreach ($variableBills as $bill) {
+            $variableBillIds[] = $bill->id;
+            $estimate = (float) $bill->estimated_amount;
+            $paid = (float) ($paidByBill[$bill->id] ?? 0);
+            $variableEstimateTotal += $estimate;
+            $remaining = max(0, round($estimate - $paid, 2));
+            $variablePendingTotal += $remaining;
+            if ($remaining > 0) {
+                $variablePendingCount++;
+            }
+        }
+
+        $fixedPaidAmount = round(
+            (float) $confirmed
+                ->reject(fn ($tx) => in_array($tx->recurring_bill_id, $variableBillIds, true))
+                ->sum('amount'),
+            2
+        );
+
+        $pendingAmount = round($plannedAmount + $variablePendingTotal, 2);
+        $totalAmount = round($fixedPaidAmount + $plannedAmount + $variableEstimateTotal, 2);
+        $pendingCount = $plannedCount + $variablePendingCount;
+        $totalCount = $paidCount + $pendingCount;
+        $paidPercent = $totalAmount > 0
+            ? (int) round(($paidAmount / $totalAmount) * 100)
+            : 0;
+
+        return [
+            'paid_amount' => $paidAmount,
+            'pending_amount' => $pendingAmount,
+            'total_amount' => $totalAmount,
+            'paid_count' => $paidCount,
+            'pending_count' => $pendingCount,
+            'total_count' => $totalCount,
+            'paid_percent' => $paidPercent,
+            'paid_by_bill' => $paidByBill,
+        ];
     }
 
     public function confirm(Transaction $transaction, float $amount, ?string $date = null, array $payment = []): Transaction
@@ -131,36 +247,39 @@ class RecurringBillService
 
     /**
      * Confirma planned do mês ou cria expense confirmada vinculada à conta fixa.
+     * Conta variável: sempre cria um novo lançamento confirmado (vários no mês).
      */
     public function settleForBill(User $user, RecurringBill $bill, array $data): Transaction
     {
         $date = Carbon::parse($data['date']);
 
-        $planned = Transaction::query()
-            ->where('recurring_bill_id', $bill->id)
-            ->where('status', Transaction::STATUS_PLANNED)
-            ->whereYear('date', $date->year)
-            ->whereMonth('date', $date->month)
-            ->first();
+        if (! $bill->isVariable()) {
+            $planned = Transaction::query()
+                ->where('recurring_bill_id', $bill->id)
+                ->where('status', Transaction::STATUS_PLANNED)
+                ->whereYear('date', $date->year)
+                ->whereMonth('date', $date->month)
+                ->first();
 
-        if ($planned) {
-            $confirmed = $this->confirm(
-                $planned,
-                (float) $data['amount'],
-                $data['date'],
-                [
-                    'payment_method' => $data['payment_method'] ?? null,
-                    'payment_card_id' => $data['payment_card_id'] ?? null,
-                ]
-            );
+            if ($planned) {
+                $confirmed = $this->confirm(
+                    $planned,
+                    (float) $data['amount'],
+                    $data['date'],
+                    [
+                        'payment_method' => $data['payment_method'] ?? null,
+                        'payment_card_id' => $data['payment_card_id'] ?? null,
+                    ]
+                );
 
-            $confirmed->update([
-                'description' => $data['description'] ?? $confirmed->description,
-                'category_id' => $data['category_id'] ?? $confirmed->category_id,
-                'credit_card_invoice_id' => $data['credit_card_invoice_id'] ?? $confirmed->credit_card_invoice_id,
-            ]);
+                $confirmed->update([
+                    'description' => $data['description'] ?? $confirmed->description,
+                    'category_id' => $data['category_id'] ?? $confirmed->category_id,
+                    'credit_card_invoice_id' => $data['credit_card_invoice_id'] ?? $confirmed->credit_card_invoice_id,
+                ]);
 
-            return $confirmed->fresh();
+                return $confirmed->fresh();
+            }
         }
 
         return Transaction::create([
@@ -182,6 +301,7 @@ class RecurringBillService
 
     /**
      * Vincula uma saída existente à conta fixa, dando baixa no planned do mês se houver.
+     * Conta variável: só vincula o lançamento (sem consumir planned).
      */
     public function linkExpenseToBill(
         User $user,
@@ -192,34 +312,36 @@ class RecurringBillService
         $date = Carbon::parse($data['date'] ?? $expense->date);
         $dateString = $date->toDateString();
 
-        $planned = Transaction::query()
-            ->where('recurring_bill_id', $bill->id)
-            ->where('status', Transaction::STATUS_PLANNED)
-            ->whereYear('date', $date->year)
-            ->whereMonth('date', $date->month)
-            ->first();
+        if (! $bill->isVariable()) {
+            $planned = Transaction::query()
+                ->where('recurring_bill_id', $bill->id)
+                ->where('status', Transaction::STATUS_PLANNED)
+                ->whereYear('date', $date->year)
+                ->whereMonth('date', $date->month)
+                ->first();
 
-        if ($planned && $planned->id !== $expense->id) {
-            $confirmed = $this->confirm(
-                $planned,
-                (float) ($data['amount'] ?? $expense->amount),
-                $dateString,
-                [
-                    'payment_method' => $data['payment_method'] ?? $expense->payment_method,
-                    'payment_card_id' => $data['payment_card_id'] ?? $expense->payment_card_id,
-                ]
-            );
+            if ($planned && $planned->id !== $expense->id) {
+                $confirmed = $this->confirm(
+                    $planned,
+                    (float) ($data['amount'] ?? $expense->amount),
+                    $dateString,
+                    [
+                        'payment_method' => $data['payment_method'] ?? $expense->payment_method,
+                        'payment_card_id' => $data['payment_card_id'] ?? $expense->payment_card_id,
+                    ]
+                );
 
-            $confirmed->update([
-                'description' => $data['description'] ?? $expense->description,
-                'category_id' => $data['category_id'] ?? $expense->category_id,
-                'credit_card_invoice_id' => $data['credit_card_invoice_id'] ?? $expense->credit_card_invoice_id,
-                'user_id' => $user->id,
-            ]);
+                $confirmed->update([
+                    'description' => $data['description'] ?? $expense->description,
+                    'category_id' => $data['category_id'] ?? $expense->category_id,
+                    'credit_card_invoice_id' => $data['credit_card_invoice_id'] ?? $expense->credit_card_invoice_id,
+                    'user_id' => $user->id,
+                ]);
 
-            $expense->delete();
+                $expense->delete();
 
-            return $confirmed->fresh();
+                return $confirmed->fresh();
+            }
         }
 
         $expense->update([
@@ -244,6 +366,10 @@ class RecurringBillService
      */
     public function propagateToPlanned(RecurringBill $bill, string $scope, ?string $fromDate = null): int
     {
+        if ($bill->isVariable()) {
+            return 0;
+        }
+
         $query = Transaction::query()
             ->where('recurring_bill_id', $bill->id)
             ->where('status', Transaction::STATUS_PLANNED);

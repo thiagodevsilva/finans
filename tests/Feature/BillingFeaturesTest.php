@@ -780,4 +780,145 @@ class BillingFeaturesTest extends TestCase
         $this->assertSame($target->id, $payment->credit_card_invoice_id);
         $this->assertStringContainsString('venc. 20/09/2026', $payment->description);
     }
+
+    public function test_variable_bill_does_not_create_planned_and_multiple_payments_count_as_fixed(): void
+    {
+        $this->travelTo('2026-08-15 12:00:00');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-bills.store'), [
+                'description' => 'Combustível',
+                'kind' => RecurringBill::KIND_VARIABLE,
+                'category_id' => $category->id,
+                'estimated_amount' => 800,
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'start_date' => '2026-08-01',
+            ])
+            ->assertRedirect();
+
+        $bill = RecurringBill::withoutGlobalScopes()->first();
+        $this->assertNotNull($bill);
+        $this->assertSame(RecurringBill::KIND_VARIABLE, $bill->kind);
+        $this->assertNull($bill->day_of_month);
+
+        $this->assertSame(
+            0,
+            Transaction::withoutGlobalScopes()
+                ->where('recurring_bill_id', $bill->id)
+                ->where('status', Transaction::STATUS_PLANNED)
+                ->count()
+        );
+
+        foreach ([150, 200, 100] as $amount) {
+            $this->actingAs($owner)
+                ->post(route('transactions.store'), [
+                    'type' => Transaction::TYPE_EXPENSE,
+                    'amount' => $amount,
+                    'description' => "Posto {$amount}",
+                    'category_id' => $category->id,
+                    'date' => '2026-08-10',
+                    'payment_method' => Transaction::PAYMENT_PIX,
+                    'recurring_bill_id' => $bill->id,
+                ])
+                ->assertRedirect();
+        }
+
+        $this->assertSame(
+            3,
+            Transaction::withoutGlobalScopes()
+                ->where('recurring_bill_id', $bill->id)
+                ->where('status', Transaction::STATUS_CONFIRMED)
+                ->count()
+        );
+
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 8, 'year' => 2026]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('summary.expense_debit', 0)
+                ->where('summary.expense_credit', 0)
+                ->where('summary.expense_spend', 0)
+                ->where('recurringSummary.paid_amount', 450)
+                ->where('recurringSummary.total_amount', 800)
+                ->where('recurringSummary.pending_amount', 350)
+                ->where('recurringSummary.paid_percent', 56)
+            );
+
+        $this->actingAs($owner)
+            ->get(route('recurring-bills.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('RecurringBills/Index')
+                ->where('upcoming', [])
+                ->where('bills.0.kind', RecurringBill::KIND_VARIABLE)
+                ->where('bills.0.month_paid', 450)
+                ->where('bills.0.month_percent', 56)
+                ->where('periodSummary.current.paid_amount', 450)
+                ->where('periodSummary.current.total_amount', 800)
+            );
+    }
+
+    public function test_variable_bill_rejects_missing_kind_defaults_and_fixed_still_requires_day(): void
+    {
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-bills.store'), [
+                'description' => 'Sem dia',
+                'kind' => RecurringBill::KIND_FIXED,
+                'category_id' => $category->id,
+                'estimated_amount' => 100,
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'start_date' => now()->toDateString(),
+            ])
+            ->assertSessionHasErrors('day_of_month');
+    }
+
+    public function test_variable_bill_can_exceed_estimate(): void
+    {
+        $this->travelTo('2026-08-20 12:00:00');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-bills.store'), [
+                'description' => 'Mercado',
+                'kind' => RecurringBill::KIND_VARIABLE,
+                'category_id' => $category->id,
+                'estimated_amount' => 500,
+                'start_date' => '2026-08-01',
+            ])
+            ->assertRedirect();
+
+        $bill = RecurringBill::withoutGlobalScopes()->first();
+
+        $this->actingAs($owner)
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_EXPENSE,
+                'amount' => 620,
+                'description' => 'Extra',
+                'category_id' => $category->id,
+                'date' => '2026-08-18',
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'recurring_bill_id' => $bill->id,
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 8, 'year' => 2026]))
+            ->assertInertia(fn ($page) => $page
+                ->where('recurringSummary.paid_amount', 620)
+                ->where('recurringSummary.total_amount', 500)
+                ->where('recurringSummary.pending_amount', 0)
+                ->where('recurringSummary.paid_percent', 124)
+            );
+    }
 }

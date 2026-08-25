@@ -425,9 +425,11 @@ const selectBill = (item) => {
     billOpen.value = false;
 
     if (!isEdit.value) {
-        form.description = item.description;
         form.category_id = item.category_id;
-        form.amount = item.estimated_amount;
+        if (item.kind !== 'variable') {
+            form.description = item.description;
+            form.amount = item.estimated_amount;
+        }
     }
 };
 
@@ -691,10 +693,10 @@ const submit = () => {
                 </div>
 
                 <div
-                    v-if="isEdit && form.type === 'expense' && recurringBills.length && !form.is_installment"
+                    v-if="form.type === 'expense' && recurringBills.length && !form.is_installment && !form.recurring_transaction_id"
                     class="relative"
                 >
-                    <InputLabel value="Conta fixa" />
+                    <InputLabel :value="isEdit ? 'Conta fixa' : 'Vincular a conta fixa (opcional)'" />
                     <template v-if="form.recurring_bill_id && !billPickerOpen">
                         <p class="mt-2 text-sm text-horizon-600">
                             Vinculada: <span class="font-medium text-navy-700">{{ linkedBillLabel }}</span>
@@ -706,7 +708,7 @@ const submit = () => {
                             type="search"
                             class="mt-1 block w-full"
                             v-model="billSearch"
-                            placeholder="Buscar conta fixa cadastrada…"
+                            placeholder="Buscar conta fixa ou variável…"
                             autocomplete="off"
                             @focus="billOpen = true"
                             @blur="billOpen = false"

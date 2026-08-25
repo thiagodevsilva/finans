@@ -37,6 +37,7 @@ const catalogExpanded = ref(false);
 
 const form = useForm({
     description: '',
+    kind: 'fixed',
     category_id: '',
     estimated_amount: '',
     day_of_month: '10',
@@ -209,10 +210,13 @@ const toggleMonth = (key) => {
     expandedMonths.value[key] = !isMonthExpanded(key);
 };
 
+const isVariableKind = computed(() => form.kind === 'variable');
+
 const resetForm = () => {
     editing.value = null;
     showForm.value = false;
     form.reset();
+    form.kind = 'fixed';
     form.day_of_month = '10';
     form.payment_selection = 'pix';
     form.payment_method = 'pix';
@@ -224,6 +228,7 @@ const resetForm = () => {
 const openCreateForm = () => {
     editing.value = null;
     form.reset();
+    form.kind = 'fixed';
     form.day_of_month = '10';
     form.payment_selection = 'pix';
     form.payment_method = 'pix';
@@ -237,9 +242,10 @@ const openCreateForm = () => {
 const startEdit = (bill) => {
     editing.value = bill.id;
     form.description = bill.description;
+    form.kind = bill.kind || 'fixed';
     form.category_id = bill.category_id;
     form.estimated_amount = bill.estimated_amount;
-    form.day_of_month = String(bill.day_of_month);
+    form.day_of_month = bill.day_of_month != null ? String(bill.day_of_month) : '10';
     form.payment_selection = bill.payment_method === 'card' && bill.payment_card_id
         ? `card:${bill.payment_card_id}`
         : (bill.payment_method || 'pix');
@@ -611,9 +617,24 @@ const skip = (item) => {
                             class="px-4 py-3"
                         >
                             <div class="min-w-0">
-                                <h3 class="truncate text-sm font-semibold text-navy-700">{{ bill.description }}</h3>
+                                <h3 class="flex flex-wrap items-center gap-1.5 truncate text-sm font-semibold text-navy-700">
+                                    <span class="truncate">{{ bill.description }}</span>
+                                    <span
+                                        v-if="bill.kind === 'variable'"
+                                        class="shrink-0 rounded-full bg-horizon-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-horizon-600"
+                                    >
+                                        Variável
+                                    </span>
+                                </h3>
                                 <p class="mt-0.5 truncate text-xs text-horizon-500">
-                                    Dia {{ bill.day_of_month }} · {{ formatBRL(bill.estimated_amount) }}
+                                    <template v-if="bill.kind === 'variable'">
+                                        Estimativa {{ formatBRL(bill.estimated_amount) }}
+                                        · {{ formatBRL(bill.month_paid || 0) }} neste mês
+                                        ({{ bill.month_percent || 0 }}%)
+                                    </template>
+                                    <template v-else>
+                                        Dia {{ bill.day_of_month }} · {{ formatBRL(bill.estimated_amount) }}
+                                    </template>
                                 </p>
                                 <p class="mt-0.5 truncate text-xs text-horizon-500">
                                     <span
@@ -628,6 +649,15 @@ const skip = (item) => {
                                     </span>
                                     <span v-if="!bill.active"> · Inativa</span>
                                 </p>
+                                <div
+                                    v-if="bill.kind === 'variable'"
+                                    class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-horizon-100"
+                                >
+                                    <div
+                                        class="h-full rounded-full bg-brand-500"
+                                        :style="{ width: `${Math.min(bill.month_percent || 0, 100)}%` }"
+                                    />
+                                </div>
                                 <p class="mt-1 text-[11px] text-horizon-400">
                                     {{ bill.user_id === userId ? 'Minha' : bill.user?.name }}
                                 </p>
@@ -682,9 +712,23 @@ const skip = (item) => {
                         class="flex items-center justify-between gap-3 px-4 py-3"
                     >
                         <div class="min-w-0 flex-1">
-                            <h3 class="truncate text-sm font-semibold text-navy-700">{{ bill.description }}</h3>
+                            <h3 class="flex flex-wrap items-center gap-1.5 truncate text-sm font-semibold text-navy-700">
+                                <span class="truncate">{{ bill.description }}</span>
+                                <span
+                                    v-if="bill.kind === 'variable'"
+                                    class="shrink-0 rounded-full bg-horizon-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-horizon-600"
+                                >
+                                    Variável
+                                </span>
+                            </h3>
                             <p class="truncate text-xs text-horizon-500">
-                                Dia {{ bill.day_of_month }} · {{ formatBRL(bill.estimated_amount) }}
+                                <template v-if="bill.kind === 'variable'">
+                                    {{ formatBRL(bill.month_paid || 0) }} / {{ formatBRL(bill.estimated_amount) }}
+                                    ({{ bill.month_percent || 0 }}%)
+                                </template>
+                                <template v-else>
+                                    Dia {{ bill.day_of_month }} · {{ formatBRL(bill.estimated_amount) }}
+                                </template>
                                 <span v-if="bill.category"> · {{ bill.category.name }}</span>
                             </p>
                         </div>
@@ -708,7 +752,15 @@ const skip = (item) => {
                     {{ editing ? 'Editar conta fixa' : 'Nova conta fixa' }}
                 </h2>
                 <p class="mt-1 text-sm text-horizon-500">
-                    {{ editing ? 'Alterações no cadastro não afetam pagamentos já confirmados.' : 'A conta será repetida todo mês no dia escolhido.' }}
+                    <template v-if="isVariableKind">
+                        Vários gastos no mês abatem a estimativa. Sem vencimento automático.
+                    </template>
+                    <template v-else-if="editing">
+                        Alterações no cadastro não afetam pagamentos já confirmados.
+                    </template>
+                    <template v-else>
+                        A conta será repetida todo mês no dia escolhido.
+                    </template>
                 </p>
                 <div class="mt-5 grid gap-3 sm:grid-cols-2">
                     <div class="sm:col-span-2">
@@ -716,12 +768,26 @@ const skip = (item) => {
                         <TextInput class="mt-1 block w-full" v-model="form.description" placeholder="Ex.: Internet" required />
                         <InputError class="mt-1" :message="form.errors.description" />
                     </div>
+                    <div class="sm:col-span-2">
+                        <InputLabel value="Tipo" />
+                        <div class="mt-2 flex flex-wrap gap-4 text-sm text-navy-700">
+                            <label class="flex items-center gap-2">
+                                <input v-model="form.kind" type="radio" value="fixed" class="text-brand-500 focus:ring-brand-500" />
+                                Fixa (vencimento no mês)
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input v-model="form.kind" type="radio" value="variable" class="text-brand-500 focus:ring-brand-500" />
+                                Variável (vários gastos no mês)
+                            </label>
+                        </div>
+                        <InputError class="mt-1" :message="form.errors.kind" />
+                    </div>
                     <div>
                         <InputLabel value="Valor estimado (R$)" />
                         <MoneyInput class="mt-1" v-model="form.estimated_amount" required />
                         <InputError class="mt-1" :message="form.errors.estimated_amount" />
                     </div>
-                    <div>
+                    <div v-if="!isVariableKind">
                         <InputLabel value="Dia do vencimento" />
                         <TextInput type="number" min="1" max="31" class="mt-1 block w-full" v-model="form.day_of_month" required />
                         <InputError class="mt-1" :message="form.errors.day_of_month" />
@@ -758,7 +824,7 @@ const skip = (item) => {
                         <TextInput type="date" class="mt-1 block w-full" v-model="form.end_date" />
                         <InputError class="mt-1" :message="form.errors.end_date" />
                     </div>
-                    <div v-if="editing" class="sm:col-span-2 space-y-2 rounded-xl border border-horizon-200 bg-horizon-50/50 p-3">
+                    <div v-if="editing && !isVariableKind" class="sm:col-span-2 space-y-2 rounded-xl border border-horizon-200 bg-horizon-50/50 p-3">
                         <InputLabel value="Ao salvar, atualizar lançamentos pendentes?" />
                         <div class="space-y-2 text-sm text-navy-700">
                             <label class="flex items-center gap-2">

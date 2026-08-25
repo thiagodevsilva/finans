@@ -45,11 +45,12 @@ alwaysApply: true
 ## Contabilidade
 
 - Compra no cartão / parcela / conta fixa confirmada = `expense` (conta em gastos).
+- No dashboard: **Gastos** (crédito + débito) excluem contas fixas (`recurring_bill_id`); o card de contas fixas mostra o progresso delas. Links abrem Transações com `spend_group`. O **saldo do mês** continua descontando contas fixas pagas à vista (são saída de caixa).
 - Pagamento de fatura = `transfer` (não conta em gastos).
 - No form de pagamento: **sugerir** a fatura pelo ciclo (antes do fechamento → atual; no dia/depois → seguinte), mas o usuário **escolhe** a fatura livremente (`credit_card_invoice_id`). Pagamentos de fatura podem ser editados.
 - Cartão de crédito exige `closing_day` e `due_day`.
 - Cartão benefício não reduz caixa e não gera fatura/parcelas.
-- Contas fixas geram `planned`; só `confirmed` entra em dashboard/relatórios.
+- Contas fixas (`kind=fixed`) geram `planned`; só `confirmed` entra em dashboard/relatórios. Contas **variáveis** (`kind=variable`) não geram vencimento: vários gastos vinculados abatem a estimativa do mês e também ficam fora de Gastos.
 - **Saldo (caixa)** = âncora + entradas − saídas de dinheiro (PIX/dinheiro/transferência/débito/débito automático/fatura/investimento). Crédito não reduz até pagar a fatura.
 - **Saldo do mês** = income − saídas de dinheiro do mês − investment (confirmed). Crédito e cartão benefício não entram.
 - Débito e débito automático saem do caixa.

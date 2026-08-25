@@ -116,6 +116,7 @@ class BalanceFeaturesTest extends TestCase
                 ->where('summary.month_balance', 50) // 200 - 50(PIX) - 100(invest); crédito 80 não entra
                 ->where('summary.expense_credit', 80)
                 ->where('summary.expense_debit', 50)
+                ->where('summary.expense_spend', 130)
                 ->where('summary.investments', 100)
             );
     }
@@ -300,6 +301,10 @@ class BalanceFeaturesTest extends TestCase
                 ->where('recurringSummary.total_count', 2)
                 ->where('recurringSummary.paid_amount', 1400)
                 ->where('recurringSummary.pending_amount', 120)
+                // Conta fixa paga não entra em gastos variáveis.
+                ->where('summary.expense_debit', 0)
+                // Mas reduz o saldo do mês (saída de caixa).
+                ->where('summary.month_balance', -1400)
             );
     }
 

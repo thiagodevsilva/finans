@@ -38,6 +38,11 @@ class TransactionController extends Controller
         $type = $request->input('type');
         $categoryId = $request->input('category_id');
         $paymentMethods = $this->normalizePaymentMethodsFilter($request->input('payment_methods'));
+        $spendGroup = $this->normalizeSpendGroupFilter($request->input('spend_group'));
+
+        if ($spendGroup !== null) {
+            $type = Transaction::TYPE_EXPENSE;
+        }
 
         $start = Carbon::create($year, $month, 1)->startOfMonth();
         $end = (clone $start)->endOfMonth();
@@ -48,7 +53,8 @@ class TransactionController extends Controller
                 $q->where('status', Transaction::STATUS_CONFIRMED)
                     ->orWhereNull('status');
             })
-            ->when($type, fn ($q) => $q->where('type', $type))
+            ->when($spendGroup !== null, fn ($q) => $q->spendGroup($spendGroup))
+            ->when($type && $spendGroup === null, fn ($q) => $q->where('type', $type))
             ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
             ->when($paymentMethods !== [], fn ($q) => $q->whereIn('payment_method', $paymentMethods));
 
@@ -90,6 +96,7 @@ class TransactionController extends Controller
                 'type' => $type,
                 'category_id' => $categoryId,
                 'payment_methods' => $paymentMethods,
+                'spend_group' => $spendGroup,
             ],
             'filterSummary' => [
                 'count' => (int) ($filterSummary->total_count ?? 0),
@@ -452,15 +459,32 @@ class TransactionController extends Controller
         return RecurringBill::query()
             ->where('active', true)
             ->orderBy('description')
-            ->get(['id', 'description', 'category_id', 'estimated_amount', 'day_of_month'])
-            ->map(fn (RecurringBill $bill) => [
-                'id' => $bill->id,
-                'description' => $bill->description,
-                'category_id' => $bill->category_id,
-                'estimated_amount' => (float) $bill->estimated_amount,
-                'day_of_month' => $bill->day_of_month,
-                'label' => sprintf('%s · dia %d · R$ %s', $bill->description, $bill->day_of_month, number_format((float) $bill->estimated_amount, 2, ',', '.')),
-            ])
+            ->get(['id', 'description', 'category_id', 'estimated_amount', 'day_of_month', 'kind'])
+            ->map(function (RecurringBill $bill) {
+                $kind = $bill->kind ?? RecurringBill::KIND_FIXED;
+                $label = $kind === RecurringBill::KIND_VARIABLE
+                    ? sprintf(
+                        '%s · variável · R$ %s',
+                        $bill->description,
+                        number_format((float) $bill->estimated_amount, 2, ',', '.')
+                    )
+                    : sprintf(
+                        '%s · dia %d · R$ %s',
+                        $bill->description,
+                        (int) $bill->day_of_month,
+                        number_format((float) $bill->estimated_amount, 2, ',', '.')
+                    );
+
+                return [
+                    'id' => $bill->id,
+                    'description' => $bill->description,
+                    'kind' => $kind,
+                    'category_id' => $bill->category_id,
+                    'estimated_amount' => (float) $bill->estimated_amount,
+                    'day_of_month' => $bill->day_of_month,
+                    'label' => $label,
+                ];
+            })
             ->all();
     }
 
@@ -525,5 +549,14 @@ class TransactionController extends Controller
             array_map('strval', $raw),
             fn (string $method) => in_array($method, $allowed, true)
         )));
+    }
+
+    private function normalizeSpendGroupFilter(mixed $raw): ?string
+    {
+        if (! is_string($raw) || $raw === '') {
+            return null;
+        }
+
+        return in_array($raw, Transaction::SPEND_GROUPS, true) ? $raw : null;
     }
 }

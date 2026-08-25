@@ -57,9 +57,9 @@ database/migrations/
 5. Identidade visual: amarelo `#ffc107` primário; azul `#2563eb` só em CTAs.
 6. Entradas usam conta bancária opcional; saídas usam forma de pagamento (e cartão quando aplicável). Débito / débito automático saem do caixa.
 7. **Despesa = compra.** Pagamento de fatura é `type=transfer` e **não** entra em totais de gasto.
-8. Relatórios/dashboard somam só `status=confirmed` e `type` income/expense (nunca transfer). **Saldo** do dashboard = caixa com âncora; **saldo do mês** = income − saídas de dinheiro do mês − investment (crédito e benefício não entram). Gastos no crédito vs débito separam onde se comprou; benefício entra no total de gastos, mas em nenhum dos dois.
+8. Relatórios/dashboard somam só `status=confirmed` e `type` income/expense (nunca transfer). **Saldo** do dashboard = caixa com âncora; **saldo do mês** = income − saídas de dinheiro do mês − investment (crédito e benefício não entram). **Gastos** no dashboard = crédito + débito (sem fixas); benefício entra no total de gastos da conta, mas em nenhuma das duas vertentes.
 9. Parcelas: UI do mês mostra só a parcela do período; detalhe da compra no plano.
-10. Contas fixas: `planned` até confirmar; só confirmadas contam como gasto. No dashboard, % das contas fixas é por **valor**.
+10. Contas fixas: `planned` até confirmar; só confirmadas contam como gasto. Variáveis (`kind=variable`) não geram planned — vários lançamentos abatem a estimativa. No dashboard, % das contas fixas é por **valor**.
 11. **Testes nunca usam o MySQL do app.** A suite força `sqlite :memory:` (`phpunit.xml` + `CreatesApplication`). Requer extensão `pdo_sqlite` (`php8.1-sqlite3`).
 
 ## Skills do projeto

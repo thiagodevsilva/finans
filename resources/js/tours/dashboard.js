@@ -35,7 +35,7 @@ export const dashboardSteps = [
         query: { tour: DASHBOARD_TOUR_ID },
         attachTo: { element: '[data-tour="dash-stats"]', on: 'bottom' },
         title: 'Saldo do mês e gastos',
-        text: 'No mesmo card ficam o saldo do mês (entradas menos saídas de dinheiro menos investimentos — crédito e benefício não entram) e, ao lado, entradas e gastos no crédito e no débito. Assim você vê onde comprou mais.',
+        text: 'No mesmo card ficam o saldo do mês (entradas menos saídas de caixa menos investimentos) e, ao lado, entradas e gastos (crédito e débito). Toque em Crédito ou Débito para ver os lançamentos. Contas fixas ficam no bloco próprio.',
     },
     {
         id: 'dash-recurring',
@@ -43,7 +43,7 @@ export const dashboardSteps = [
         query: { tour: DASHBOARD_TOUR_ID },
         attachTo: { element: '[data-tour="dash-recurring"]', on: 'bottom' },
         title: 'Contas fixas',
-        text: 'Progresso do mês por valor, não por quantidade de contas. Use R$ ou % e abra a lista completa em Ver contas fixas.',
+        text: 'Progresso do mês por valor. Contas fixas têm vencimento; variáveis abatem a estimativa com vários gastos. Use R$ ou % e abra a lista em Ver contas fixas.',
     },
     {
         id: 'dash-recent',

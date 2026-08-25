@@ -15,11 +15,21 @@ class RecurringBill extends Model
 
     public const FREQUENCY_MONTHLY = 'monthly';
 
+    public const KIND_FIXED = 'fixed';
+
+    public const KIND_VARIABLE = 'variable';
+
+    public const KINDS = [
+        self::KIND_FIXED,
+        self::KIND_VARIABLE,
+    ];
+
     protected $fillable = [
         'account_id',
         'user_id',
         'category_id',
         'description',
+        'kind',
         'estimated_amount',
         'day_of_month',
         'frequency',
@@ -37,6 +47,16 @@ class RecurringBill extends Model
         'end_date' => 'date',
         'active' => 'boolean',
     ];
+
+    public function isVariable(): bool
+    {
+        return $this->kind === self::KIND_VARIABLE;
+    }
+
+    public function isFixed(): bool
+    {
+        return $this->kind !== self::KIND_VARIABLE;
+    }
 
     public function account(): BelongsTo
     {

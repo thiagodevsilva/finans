@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\PaymentCard;
 use App\Models\Transaction;
 use App\Services\BalanceService;
+use App\Services\RecurringBillService;
 use App\Services\ReportChartService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -13,7 +14,12 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request, BalanceService $balances, ReportChartService $charts): Response
+    public function __invoke(
+        Request $request,
+        BalanceService $balances,
+        ReportChartService $charts,
+        RecurringBillService $recurringBills,
+    ): Response
     {
         $month = (int) $request->input('month', now()->month);
         $year = (int) $request->input('year', now()->year);
@@ -44,20 +50,34 @@ class DashboardController extends Controller
             ->sum('amount');
 
         $expenseCredit = (float) (clone $confirmedInMonth())
-            ->where('type', Transaction::TYPE_EXPENSE)
-            ->where('payment_method', Transaction::PAYMENT_CARD)
-            ->whereHas('paymentCard', fn ($q) => $q->where('type', PaymentCard::TYPE_CREDIT))
+            ->spendGroup(Transaction::SPEND_GROUP_CREDIT)
             ->sum('amount');
 
-        $expenseBenefit = (float) (clone $confirmedInMonth())
-            ->where('type', Transaction::TYPE_EXPENSE)
-            ->where('payment_method', Transaction::PAYMENT_CARD)
-            ->whereHas('paymentCard', fn ($q) => $q->where('type', PaymentCard::TYPE_BENEFIT))
+        $expenseDebit = (float) (clone $confirmedInMonth())
+            ->spendGroup(Transaction::SPEND_GROUP_DEBIT)
             ->sum('amount');
 
-        // Débito/PIX/dinheiro etc. — exclui crédito e benefício (não saem do caixa do mês).
-        // Pagamento de fatura é transfer e NÃO entra aqui.
-        $expenseDebit = round($expense - $expenseCredit - $expenseBenefit, 2);
+        // Saídas de caixa do mês (inclui contas fixas à vista) — base do saldo do mês.
+        $cashExpense = (float) (clone $confirmedInMonth())
+            ->where('type', Transaction::TYPE_EXPENSE)
+            ->where(function ($q) {
+                $q->whereNull('payment_method')
+                    ->orWhereIn('payment_method', [
+                        Transaction::PAYMENT_CASH,
+                        Transaction::PAYMENT_PIX,
+                        Transaction::PAYMENT_TRANSFER,
+                        Transaction::PAYMENT_DEBIT,
+                        Transaction::PAYMENT_AUTO_DEBIT,
+                    ])
+                    ->orWhere(function ($debitCard) {
+                        $debitCard->where('payment_method', Transaction::PAYMENT_CARD)
+                            ->whereHas(
+                                'paymentCard',
+                                fn ($card) => $card->where('type', PaymentCard::TYPE_DEBIT)
+                            );
+                    });
+            })
+            ->sum('amount');
 
         $cardPayments = $charts->cardPaymentsTotal($start->toDateString(), $end->toDateString());
 
@@ -75,26 +95,7 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
-        $recurringBase = Transaction::query()
-            ->whereNotNull('recurring_bill_id')
-            ->whereBetween('date', $range)
-            ->whereIn('status', [Transaction::STATUS_PLANNED, Transaction::STATUS_CONFIRMED]);
-
-        $paidAmount = (float) (clone $recurringBase)
-            ->where('status', Transaction::STATUS_CONFIRMED)
-            ->sum('amount');
-        $pendingAmount = (float) (clone $recurringBase)
-            ->where('status', Transaction::STATUS_PLANNED)
-            ->sum('amount');
-        $paidCount = (clone $recurringBase)
-            ->where('status', Transaction::STATUS_CONFIRMED)
-            ->count();
-        $pendingCount = (clone $recurringBase)
-            ->where('status', Transaction::STATUS_PLANNED)
-            ->count();
-        $totalCount = $paidCount + $pendingCount;
-        $totalAmount = $paidAmount + $pendingAmount;
-        $paidPercent = $totalAmount > 0 ? (int) round(($paidAmount / $totalAmount) * 100) : 0;
+        $recurringSummary = $recurringBills->summarizeMonth($start);
 
         $previousMonthEnd = now()->copy()->startOfMonth()->subDay()->endOfDay();
         $previousMonthBalance = $balances->needsInitialAnchor()
@@ -113,12 +114,13 @@ class DashboardController extends Controller
         return Inertia::render('Dashboard', [
             'summary' => [
                 'balance' => $cashBalance,
-                // Só gastos à vista + investimentos (crédito, benefício e fatura não entram).
-                'month_balance' => round($income - $expenseDebit - $investments, 2),
+                // Entradas − saídas de caixa (inclui contas fixas à vista) − investimentos.
+                'month_balance' => round($income - $cashExpense - $investments, 2),
                 'income' => $income,
                 'expense' => $expense,
                 'expense_credit' => $expenseCredit,
                 'expense_debit' => $expenseDebit,
+                'expense_spend' => round($expenseCredit + $expenseDebit, 2),
                 'card_payments' => $cardPayments,
                 'investments' => $investments,
             ],
@@ -133,13 +135,13 @@ class DashboardController extends Controller
                 'stale_recalc_mode' => $staleRecalc['stale_recalc_mode'] ?? null,
             ],
             'recurringSummary' => [
-                'paid_amount' => $paidAmount,
-                'pending_amount' => $pendingAmount,
-                'total_amount' => $totalAmount,
-                'paid_count' => $paidCount,
-                'pending_count' => $pendingCount,
-                'total_count' => $totalCount,
-                'paid_percent' => $paidPercent,
+                'paid_amount' => $recurringSummary['paid_amount'],
+                'pending_amount' => $recurringSummary['pending_amount'],
+                'total_amount' => $recurringSummary['total_amount'],
+                'paid_count' => $recurringSummary['paid_count'],
+                'pending_count' => $recurringSummary['pending_count'],
+                'total_count' => $recurringSummary['total_count'],
+                'paid_percent' => $recurringSummary['paid_percent'],
             ],
             'filters' => [
                 'month' => $month,

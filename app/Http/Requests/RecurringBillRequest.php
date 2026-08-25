@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\RecurringBill;
 use App\Models\Transaction;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -18,16 +19,24 @@ class RecurringBillRequest extends FormRequest
     {
         $accountId = $this->user()->account_id;
         $isCard = $this->input('payment_method') === Transaction::PAYMENT_CARD;
+        $isFixed = $this->input('kind', RecurringBill::KIND_FIXED) === RecurringBill::KIND_FIXED;
 
         return [
             'description' => ['required', 'string', 'max:255'],
+            'kind' => ['required', Rule::in(RecurringBill::KINDS)],
             'category_id' => [
                 'required',
                 'uuid',
                 Rule::exists('categories', 'id')->where(fn ($q) => $q->where('account_id', $accountId)),
             ],
             'estimated_amount' => ['required', 'numeric', 'min:0.01'],
-            'day_of_month' => ['required', 'integer', 'min:1', 'max:31'],
+            'day_of_month' => [
+                Rule::requiredIf($isFixed),
+                'nullable',
+                'integer',
+                'min:1',
+                'max:31',
+            ],
             'payment_method' => ['nullable', Rule::in(Transaction::PAYMENT_METHODS)],
             'payment_card_id' => [
                 Rule::requiredIf($isCard),
@@ -66,7 +75,13 @@ class RecurringBillRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $kind = $this->input('kind', RecurringBill::KIND_FIXED);
+
         $this->merge([
+            'kind' => $kind,
+            'day_of_month' => $kind === RecurringBill::KIND_VARIABLE
+                ? null
+                : $this->input('day_of_month'),
             'payment_card_id' => $this->input('payment_method') === Transaction::PAYMENT_CARD
                 ? ($this->filled('payment_card_id') ? $this->input('payment_card_id') : null)
                 : null,
@@ -81,6 +96,7 @@ class RecurringBillRequest extends FormRequest
     {
         return [
             'description' => 'descrição',
+            'kind' => 'tipo',
             'category_id' => 'categoria',
             'estimated_amount' => 'valor estimado',
             'day_of_month' => 'dia do vencimento',

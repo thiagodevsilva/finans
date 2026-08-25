@@ -108,14 +108,14 @@ const showStaleBanner = computed(() =>
     && balanceModalMode.value == null,
 );
 
-const monthBalanceHelp =
-    'Só gastos à vista (PIX, débito, dinheiro etc.) e investimentos. Compras no crédito/benefício e pagamentos de fatura não entram neste número — a fatura só reduz o saldo de caixa.';
-
-const debitHelp =
-    'Tudo que saiu à vista no mês: PIX, dinheiro, transferência, débito, débito automático e cartão débito. Não é só “débito bancário”. Crédito, benefício e pagamento de fatura ficam fora.';
+const spendHelp =
+    'Compras do mês sem contas fixas. Crédito é cartão de crédito; débito é PIX, dinheiro, transferência, débito, débito automático e cartão débito. Benefício e pagamento de fatura não entram. Toque em Crédito ou Débito para ver os lançamentos.';
 
 const cardPaymentsHelp =
-    'Valor pago nas faturas de crédito no mês. Sai do saldo de caixa, mas não é gasto novo — a compra já entrou em “Gastos no crédito”.';
+    'Valor pago nas faturas de crédito no mês. Sai do saldo de caixa, mas não é gasto novo — a compra já entrou em Gastos → Crédito.';
+
+const monthBalanceHelp =
+    'Entradas menos saídas de caixa do mês (incluindo contas fixas pagas à vista) e investimentos. Compras no crédito/benefício e pagamentos de fatura não entram neste número.';
 
 const staleHelp =
     'Você lançou, alterou ou excluiu movimentações com data anterior à referência do saldo atual. A sugestão parte do saldo do fim do mês anterior e soma as movimentações de caixa deste mês.';
@@ -126,6 +126,20 @@ const staleBannerTitle = computed(() => {
     }
 
     return 'Lançamentos anteriores à data de referência do saldo foram alterados ou excluídos';
+});
+
+const expenseSpend = computed(() => {
+    if (summary.value.expense_spend != null) {
+        return Number(summary.value.expense_spend);
+    }
+    return Number(summary.value.expense_credit || 0) + Number(summary.value.expense_debit || 0);
+});
+
+const spendTransactionsHref = (group) => route('transactions.index', {
+    month: props.filters.month,
+    year: props.filters.year,
+    type: 'expense',
+    spend_group: group,
 });
 
 const staleBannerBody = computed(() => {
@@ -345,21 +359,43 @@ onMounted(() => {
                                     {{ formatBRL(summary.income) }}
                                 </span>
                             </p>
-                            <p class="text-xs text-horizon-500 sm:text-sm">
-                                <span class="sm:hidden">Crédito</span>
-                                <span class="hidden sm:inline">Gastos no crédito</span>
-                                <span class="ml-1 font-semibold tabular-nums text-red-600">
-                                    {{ formatBRL(summary.expense_credit) }}
-                                </span>
-                            </p>
-                            <p class="text-xs text-horizon-500 sm:text-sm">
-                                <span class="sm:hidden">Débito</span>
-                                <span class="hidden sm:inline">Gastos no débito</span>
-                                <HelpTip class="ml-1" :text="debitHelp" label="Sobre gastos no débito" />
-                                <span class="ml-1 font-semibold tabular-nums text-red-600">
-                                    {{ formatBRL(summary.expense_debit) }}
-                                </span>
-                            </p>
+                            <div class="text-xs text-horizon-500 sm:text-sm">
+                                <p>
+                                    Gastos
+                                    <HelpTip class="ml-1" :text="spendHelp" label="Sobre gastos" />
+                                    <span class="ml-1 font-semibold tabular-nums text-red-600">
+                                        {{ formatBRL(expenseSpend) }}
+                                    </span>
+                                </p>
+                                <div class="mt-1 inline-block border-l-2 border-horizon-200 pl-2 text-[11px] leading-snug text-horizon-500 sm:text-xs">
+                                    <p>
+                                        <Link
+                                            v-if="!showingDemo"
+                                            :href="spendTransactionsHref('credit')"
+                                            class="text-horizon-600 underline decoration-horizon-300 underline-offset-2 hover:text-cta"
+                                        >
+                                            Crédito
+                                        </Link>
+                                        <span v-else>Crédito</span>
+                                        <span class="ml-1 font-semibold tabular-nums text-red-600">
+                                            {{ formatBRL(summary.expense_credit) }}
+                                        </span>
+                                    </p>
+                                    <p class="mt-0.5">
+                                        <Link
+                                            v-if="!showingDemo"
+                                            :href="spendTransactionsHref('debit')"
+                                            class="text-horizon-600 underline decoration-horizon-300 underline-offset-2 hover:text-cta"
+                                        >
+                                            Débito
+                                        </Link>
+                                        <span v-else>Débito</span>
+                                        <span class="ml-1 font-semibold tabular-nums text-red-600">
+                                            {{ formatBRL(summary.expense_debit) }}
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
                             <p class="text-xs text-horizon-500 sm:text-sm">
                                 <span class="sm:hidden">Faturas</span>
                                 <span class="hidden sm:inline">Pagamento de cartões</span>

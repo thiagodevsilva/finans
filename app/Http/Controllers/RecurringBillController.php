@@ -31,31 +31,46 @@ class RecurringBillController extends Controller
             ->get()
             ->each(fn (RecurringBill $bill) => $this->service->materializeAhead($bill, 3));
 
+        $monthSummary = $this->service->summarizeMonth(now());
+        $paidByBill = $monthSummary['paid_by_bill'];
+
         $bills = RecurringBill::query()
             ->with(['category:id,name,color', 'user:id,name', 'paymentCard:id,name,color', 'bankAccount:id,name,color'])
             ->where('active', true)
+            ->orderByRaw('day_of_month is null')
             ->orderBy('day_of_month')
             ->orderBy('description')
             ->get()
-            ->map(fn (RecurringBill $bill) => [
-                'id' => $bill->id,
-                'description' => $bill->description,
-                'estimated_amount' => (float) $bill->estimated_amount,
-                'day_of_month' => $bill->day_of_month,
-                'payment_method' => $bill->payment_method,
-                'payment_card_id' => $bill->payment_card_id,
-                'payment_card' => $bill->paymentCard,
-                'bank_account_id' => $bill->bank_account_id,
-                'bank_account' => $bill->bankAccount,
-                'category_id' => $bill->category_id,
-                'category' => $bill->category,
-                'start_date' => $bill->start_date->toDateString(),
-                'end_date' => $bill->end_date?->toDateString(),
-                'active' => $bill->active,
-                'user_id' => $bill->user_id,
-                'user' => $bill->user,
-                'can_edit' => $user->isOwner() || $bill->user_id === $user->id,
-            ]);
+            ->map(function (RecurringBill $bill) use ($user, $paidByBill) {
+                $monthPaid = (float) ($paidByBill[$bill->id] ?? 0);
+                $estimate = (float) $bill->estimated_amount;
+                $monthPercent = $estimate > 0
+                    ? (int) round(($monthPaid / $estimate) * 100)
+                    : 0;
+
+                return [
+                    'id' => $bill->id,
+                    'description' => $bill->description,
+                    'kind' => $bill->kind ?? RecurringBill::KIND_FIXED,
+                    'estimated_amount' => $estimate,
+                    'day_of_month' => $bill->day_of_month,
+                    'payment_method' => $bill->payment_method,
+                    'payment_card_id' => $bill->payment_card_id,
+                    'payment_card' => $bill->paymentCard,
+                    'bank_account_id' => $bill->bank_account_id,
+                    'bank_account' => $bill->bankAccount,
+                    'category_id' => $bill->category_id,
+                    'category' => $bill->category,
+                    'start_date' => $bill->start_date->toDateString(),
+                    'end_date' => $bill->end_date?->toDateString(),
+                    'active' => $bill->active,
+                    'user_id' => $bill->user_id,
+                    'user' => $bill->user,
+                    'can_edit' => $user->isOwner() || $bill->user_id === $user->id,
+                    'month_paid' => $monthPaid,
+                    'month_percent' => $monthPercent,
+                ];
+            });
 
         $horizonStart = now()->startOfMonth()->toDateString();
         $horizonEnd = now()->addMonthsNoOverflow(2)->endOfMonth()->toDateString();
@@ -71,17 +86,25 @@ class RecurringBillController extends Controller
             'can_edit' => $user->isOwner() || $tx->user_id === $user->id,
         ];
 
+        // Só contas fixas (com vencimento) entram em próximos / a pagar.
         $upcoming = Transaction::query()
-            ->with(['category:id,name,color', 'recurringBill:id,description'])
+            ->with(['category:id,name,color', 'recurringBill:id,description,kind'])
             ->whereNotNull('recurring_bill_id')
             ->where('status', Transaction::STATUS_PLANNED)
             ->whereBetween('date', [$horizonStart, $horizonEnd])
+            ->whereHas(
+                'recurringBill',
+                fn ($q) => $q->where(function ($inner) {
+                    $inner->where('kind', RecurringBill::KIND_FIXED)
+                        ->orWhereNull('kind');
+                })
+            )
             ->orderBy('date')
             ->get()
             ->map($mapScheduleItem);
 
         $paid = Transaction::query()
-            ->with(['category:id,name,color', 'recurringBill:id,description'])
+            ->with(['category:id,name,color', 'recurringBill:id,description,kind'])
             ->whereNotNull('recurring_bill_id')
             ->where('status', Transaction::STATUS_CONFIRMED)
             ->whereBetween('date', [$horizonStart, $horizonEnd])
@@ -119,22 +142,15 @@ class RecurringBillController extends Controller
         $currentMonth = now()->format('Y-m');
         $nextMonth = now()->copy()->addMonthNoOverflow()->format('Y-m');
 
-        $currentPendingAmount = round($upcomingAmounts[$currentMonth] ?? 0, 2);
-        $currentPaidAmount = round($paidAmounts[$currentMonth] ?? 0, 2);
-        $currentTotalAmount = round($currentPendingAmount + $currentPaidAmount, 2);
-        $currentPaidPercent = $currentTotalAmount > 0
-            ? (int) round(($currentPaidAmount / $currentTotalAmount) * 100)
-            : 0;
-
         $periodSummary = [
             'current' => [
                 'month' => $currentMonth,
-                'pending_count' => $upcomingCounts[$currentMonth] ?? 0,
-                'pending_amount' => $currentPendingAmount,
-                'paid_count' => $paidCounts[$currentMonth] ?? 0,
-                'paid_amount' => $currentPaidAmount,
-                'total_amount' => $currentTotalAmount,
-                'paid_percent' => $currentPaidPercent,
+                'pending_count' => $monthSummary['pending_count'],
+                'pending_amount' => $monthSummary['pending_amount'],
+                'paid_count' => $monthSummary['paid_count'],
+                'paid_amount' => $monthSummary['paid_amount'],
+                'total_amount' => $monthSummary['total_amount'],
+                'paid_percent' => $monthSummary['paid_percent'],
             ],
             'next' => [
                 'month' => $nextMonth,
@@ -174,15 +190,23 @@ class RecurringBillController extends Controller
         $propagateFrom = $data['propagate_from'] ?? null;
         unset($data['propagate'], $data['propagate_from']);
 
-        $recurringBill->update($data);
-
-        if ($recurringBill->active) {
-            $this->service->materializeAhead($recurringBill->fresh(), 3);
+        if (($data['kind'] ?? null) === RecurringBill::KIND_VARIABLE) {
+            $data['day_of_month'] = null;
         }
 
-        if (in_array($propagate, ['open', 'from_date'], true)) {
+        $wasVariable = $recurringBill->isVariable();
+        $recurringBill->update($data);
+        $bill = $recurringBill->fresh();
+
+        if ($bill->isVariable()) {
+            $this->service->clearPlannedForBill($bill);
+        } elseif ($bill->active) {
+            $this->service->materializeAhead($bill, 3);
+        }
+
+        if (! $wasVariable && ! $bill->isVariable() && in_array($propagate, ['open', 'from_date'], true)) {
             $updated = $this->service->propagateToPlanned(
-                $recurringBill->fresh(),
+                $bill,
                 $propagate === 'from_date' ? 'from_date' : 'open',
                 $propagateFrom
             );

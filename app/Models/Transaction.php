@@ -66,6 +66,16 @@ class Transaction extends Model
         self::PAYMENT_AUTO_DEBIT,
     ];
 
+    /** Grupos de gasto do dashboard (exclui contas fixas e benefício). */
+    public const SPEND_GROUP_CREDIT = 'credit';
+
+    public const SPEND_GROUP_DEBIT = 'debit';
+
+    public const SPEND_GROUPS = [
+        self::SPEND_GROUP_CREDIT,
+        self::SPEND_GROUP_DEBIT,
+    ];
+
     protected $fillable = [
         'account_id',
         'user_id',
@@ -127,6 +137,55 @@ class Transaction extends Model
     public function recurringBill(): BelongsTo
     {
         return $this->belongsTo(RecurringBill::class, 'recurring_bill_id');
+    }
+
+    /**
+     * Despesas do dia a dia (sem contas fixas).
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<static>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<static>
+     */
+    public function scopeVariableExpenses($query)
+    {
+        return $query
+            ->where('type', self::TYPE_EXPENSE)
+            ->whereNull('recurring_bill_id');
+    }
+
+    /**
+     * Mesma regra do dashboard: crédito (cartão crédito) ou débito
+     * (PIX/dinheiro/débito/etc., excluindo crédito e benefício).
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<static>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<static>
+     */
+    public function scopeSpendGroup($query, string $group)
+    {
+        $query->variableExpenses();
+
+        if ($group === self::SPEND_GROUP_CREDIT) {
+            return $query
+                ->where('payment_method', self::PAYMENT_CARD)
+                ->whereHas(
+                    'paymentCard',
+                    fn ($card) => $card->where('type', PaymentCard::TYPE_CREDIT)
+                );
+        }
+
+        if ($group === self::SPEND_GROUP_DEBIT) {
+            return $query->whereNot(function ($exclude) {
+                $exclude->where('payment_method', self::PAYMENT_CARD)
+                    ->whereHas(
+                        'paymentCard',
+                        fn ($card) => $card->whereIn('type', [
+                            PaymentCard::TYPE_CREDIT,
+                            PaymentCard::TYPE_BENEFIT,
+                        ])
+                    );
+            });
+        }
+
+        return $query;
     }
 
     public function isIncome(): bool
