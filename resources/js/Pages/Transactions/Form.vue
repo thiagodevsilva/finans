@@ -12,7 +12,7 @@ import { TRANSACTIONS_TOUR_ID } from '@/tours/transactions';
 import TourDemoBanner from '@/Components/TourDemoBanner.vue';
 import OwnershipFields from '@/Components/OwnershipFields.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
     transaction: Object,
@@ -103,7 +103,7 @@ const form = useForm({
     recurring_transaction_id: '',
     recurring_bill_id: initialBillId,
     user_id: props.transaction?.user_id || authUserId.value || '',
-    is_shared: props.transaction?.is_shared || false,
+    is_shared: false,
     company_id: props.transaction?.company_id || '',
 });
 
@@ -119,9 +119,7 @@ const invoiceTouched = ref(!!props.transaction?.credit_card_invoice_id);
 
 const recurringSearch = ref('');
 const recurringOpen = ref(false);
-const billSearch = ref(initialBillId ? initialBillLabel : '');
-const billOpen = ref(false);
-const billPickerOpen = ref(!initialBillId);
+const recurringSearchInput = ref(null);
 const installmentSource = ref(null);
 
 const { startTour, resumeIfActive, isTourActive } = useAppTour();
@@ -218,22 +216,6 @@ const isCreditCard = computed(() =>
     form.type === 'expense' && form.payment_method === 'card' && selectedCard.value?.type === 'credit',
 );
 
-const filteredPending = computed(() => {
-    const q = recurringSearch.value.trim().toLowerCase();
-    if (!q) return props.pendingRecurring;
-    return props.pendingRecurring.filter((item) =>
-        item.label.toLowerCase().includes(q) || item.description.toLowerCase().includes(q),
-    );
-});
-
-const filteredBills = computed(() => {
-    const q = billSearch.value.trim().toLowerCase();
-    if (!q) return props.recurringBills;
-    return props.recurringBills.filter((item) =>
-        item.label.toLowerCase().includes(q) || item.description.toLowerCase().includes(q),
-    );
-});
-
 const selectedPending = computed(() =>
     props.pendingRecurring.find((item) => item.id === form.recurring_transaction_id) || null,
 );
@@ -242,11 +224,69 @@ const selectedBill = computed(() =>
     props.recurringBills.find((item) => item.id === form.recurring_bill_id) || null,
 );
 
+const pendingBillIds = computed(() =>
+    new Set(props.pendingRecurring.map((item) => item.recurring_bill_id).filter(Boolean)),
+);
+
+const catalogBills = computed(() =>
+    props.recurringBills.filter((bill) => {
+        if ((bill.kind || 'fixed') === 'variable') {
+            return true;
+        }
+
+        return !pendingBillIds.value.has(bill.id);
+    }),
+);
+
+const showPendingOptions = computed(() =>
+    !isEdit.value && props.pendingRecurring.length > 0 && !form.recurring_bill_id,
+);
+
+const showBillOptions = computed(() =>
+    catalogBills.value.length > 0 && !form.is_installment && !form.recurring_transaction_id,
+);
+
+const hasRecurringPicker = computed(() => {
+    if (form.type !== 'expense' || form.is_installment) {
+        return false;
+    }
+
+    return showPendingOptions.value
+        || showBillOptions.value
+        || !!selectedPending.value
+        || !!form.recurring_bill_id;
+});
+
+const filteredPending = computed(() => {
+    if (isEdit.value) {
+        return [];
+    }
+
+    const q = recurringSearch.value.trim().toLowerCase();
+    if (!q) return props.pendingRecurring;
+    return props.pendingRecurring.filter((item) =>
+        item.label.toLowerCase().includes(q) || item.description.toLowerCase().includes(q),
+    );
+});
+
+const filteredBills = computed(() => {
+    const q = recurringSearch.value.trim().toLowerCase();
+    if (!q) return catalogBills.value;
+    return catalogBills.value.filter((item) =>
+        item.label.toLowerCase().includes(q) || item.description.toLowerCase().includes(q),
+    );
+});
+
+const recurringPickerEmpty = computed(() =>
+    !filteredPending.value.length && !filteredBills.value.length,
+);
+
 const linkedBillLabel = computed(() => {
     if (selectedBill.value) return selectedBill.value.description;
-    if (form.recurring_bill_id && billSearch.value) return billSearch.value;
-    return null;
+    return initialBillLabel || null;
 });
+
+const hasLinkedRecurring = computed(() => !!selectedPending.value || !!form.recurring_bill_id);
 
 watch(
     () => form.payment_selection,
@@ -302,8 +342,7 @@ watch(
             form.recurring_transaction_id = '';
             form.recurring_bill_id = '';
             recurringSearch.value = '';
-            billSearch.value = '';
-            billPickerOpen.value = true;
+            recurringOpen.value = false;
         }
         if (type === 'investment') {
             form.payment_card_id = null;
@@ -376,8 +415,7 @@ watch(
             form.recurring_transaction_id = '';
             form.recurring_bill_id = '';
             recurringSearch.value = '';
-            billSearch.value = '';
-            billPickerOpen.value = true;
+            recurringOpen.value = false;
         } else {
             form.total_amount = '';
             form.installments_count = '';
@@ -414,10 +452,9 @@ const selectPending = (item) => {
     form.category_id = item.category_id;
     form.amount = item.amount;
     form.date = item.date;
-    recurringSearch.value = item.label;
+    recurringSearch.value = '';
     form.is_installment = false;
-    billSearch.value = '';
-    billPickerOpen.value = true;
+    recurringOpen.value = false;
 
     if (item.payment_method === 'card' && item.payment_card_id) {
         form.payment_selection = `card:${item.payment_card_id}`;
@@ -426,18 +463,11 @@ const selectPending = (item) => {
     }
 };
 
-const clearPending = () => {
-    form.recurring_transaction_id = '';
-    recurringSearch.value = '';
-};
-
 const selectBill = (item) => {
     form.recurring_bill_id = item.id;
     form.recurring_transaction_id = '';
     recurringSearch.value = '';
-    billSearch.value = item.description;
-    billPickerOpen.value = false;
-    billOpen.value = false;
+    recurringOpen.value = false;
 
     if (!isEdit.value) {
         form.category_id = item.category_id;
@@ -448,25 +478,24 @@ const selectBill = (item) => {
     }
 };
 
-const clearBill = () => {
+const clearRecurring = () => {
+    form.recurring_transaction_id = '';
     form.recurring_bill_id = '';
-    billSearch.value = '';
-    billPickerOpen.value = true;
+    recurringSearch.value = '';
+    recurringOpen.value = false;
 };
 
-const onPendingSearchInput = () => {
-    if (!form.recurring_transaction_id) return;
-    const selected = props.pendingRecurring.find((item) => item.id === form.recurring_transaction_id);
-    if (!selected || recurringSearch.value !== selected.label) {
-        form.recurring_transaction_id = '';
+const toggleRecurringPicker = () => {
+    recurringOpen.value = !recurringOpen.value;
+    if (recurringOpen.value) {
+        recurringSearch.value = '';
+        nextTick(() => recurringSearchInput.value?.focus());
     }
 };
 
-const onBillSearchInput = () => {
-    if (!form.recurring_bill_id) return;
-    const selected = props.recurringBills.find((item) => item.id === form.recurring_bill_id);
-    if (!selected || billSearch.value !== selected.description) {
-        form.recurring_bill_id = '';
+const onRecurringPickerFocusOut = (event) => {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+        recurringOpen.value = false;
     }
 };
 
@@ -529,7 +558,7 @@ const submit = () => {
             <Link :href="route('transactions.index')" class="text-sm text-cta hover:underline">Voltar</Link>
         </div>
 
-        <form class="max-w-xl space-y-4 rounded-lg bg-white p-6 shadow-sm ring-1 ring-slate-200" @submit.prevent="submit">
+        <form class="max-w-xl space-y-6 rounded-[20px] bg-white p-6 shadow-soft" @submit.prevent="submit">
             <div data-tour="tx-types">
                 <InputLabel value="Tipo" />
                 <div class="segmented mt-2">
@@ -551,13 +580,6 @@ const submit = () => {
                 </div>
                 <InputError class="mt-2" :message="form.errors.type" />
             </div>
-
-            <OwnershipFields
-                v-if="!isEdit && form.type !== 'transfer'"
-                :form="form"
-                :members="members"
-                :companies="companies"
-            />
 
             <template v-if="form.type === 'transfer'">
                 <div>
@@ -592,6 +614,13 @@ const submit = () => {
                         Você pode escolher outra fatura (ex.: pagar no dia 22 a fatura que fechou no dia 15).
                     </p>
                 </div>
+                <div class="space-y-4 rounded-[20px] bg-lightPrimary/80 p-4 ring-1 ring-horizon-100 sm:p-5">
+                    <div>
+                        <label class="text-sm font-semibold text-navy-700" for="amount">Valor</label>
+                        <MoneyInput id="amount" class="mt-1.5" size="lg" v-model="form.amount" required />
+                        <InputError class="mt-2" :message="form.errors.amount" />
+                    </div>
+                </div>
                 <div>
                     <InputLabel value="Forma de pagamento" />
                     <select v-model="form.payment_method" class="mt-1 block w-full rounded-md border-slate-300" required>
@@ -613,11 +642,6 @@ const submit = () => {
                     <InputError class="mt-2" :message="form.errors.bank_account_id" />
                 </div>
                 <div>
-                    <InputLabel for="amount" value="Valor (R$)" />
-                    <MoneyInput id="amount" class="mt-1" v-model="form.amount" required />
-                    <InputError class="mt-2" :message="form.errors.amount" />
-                </div>
-                <div>
                     <InputLabel for="date" value="Data" />
                     <TextInput id="date" type="date" class="mt-1 block w-full" v-model="form.date" required />
                     <InputError class="mt-2" :message="form.errors.date" />
@@ -631,180 +655,47 @@ const submit = () => {
             </template>
 
             <template v-else-if="isInvestment">
-                <div>
-                    <InputLabel for="amount" value="Valor (R$)" />
-                    <MoneyInput id="amount" class="mt-1" v-model="form.amount" required />
-                    <InputError class="mt-2" :message="form.errors.amount" />
-                </div>
-                <div>
-                    <InputLabel for="description" value="Descrição" />
-                    <TextInput id="description" type="text" class="mt-1 block w-full" v-model="form.description" required />
-                    <InputError class="mt-2" :message="form.errors.description" />
-                </div>
-                <div>
-                    <InputLabel value="Categoria" />
-                    <p class="mt-2 text-sm font-medium text-teal-800">Investimento</p>
-                    <p class="mt-1 text-xs text-horizon-500">Categoria padrão do sistema (automática).</p>
-                    <InputError class="mt-2" :message="form.errors.category_id" />
-                </div>
-                <div>
-                    <InputLabel value="Forma de pagamento" />
-                    <select v-model="form.payment_selection" class="mt-1 block w-full rounded-md border-slate-300" required>
-                        <option v-for="m in PAYMENT_METHODS" :key="m.value" :value="m.value">{{ m.label }}</option>
-                    </select>
-                    <InputError class="mt-2" :message="form.errors.payment_method" />
-                </div>
-                <div v-if="needsBankAccount">
-                    <InputLabel value="Conta bancária (opcional)" />
-                    <select v-model="form.bank_account_id" class="mt-1 block w-full rounded-md border-slate-300">
-                        <option value="">Sem conta</option>
-                        <option v-for="account in bankAccounts" :key="account.id" :value="account.id">
-                            {{ account.name }}
-                        </option>
-                    </select>
-                    <InputError class="mt-2" :message="form.errors.bank_account_id" />
-                </div>
-                <div>
-                    <InputLabel for="date" value="Data" />
-                    <TextInput id="date" type="date" class="mt-1 block w-full" v-model="form.date" required />
-                    <InputError class="mt-2" :message="form.errors.date" />
-                </div>
-                <p class="text-xs text-horizon-500">
-                    Conta como saída de caixa, mas não entra nos gastos de consumo — fica separado como investimento.
-                </p>
-            </template>
-
-            <template v-else>
-                <div v-if="form.type === 'expense' && !isEdit && pendingRecurring.length" class="relative">
-                    <InputLabel value="Pagar conta fixa pendente (opcional)" />
-                    <TextInput
-                        type="search"
-                        class="mt-1 block w-full"
-                        v-model="recurringSearch"
-                        placeholder="Buscar pendente ou vencida…"
-                        autocomplete="off"
-                        @focus="recurringOpen = true"
-                        @blur="recurringOpen = false"
-                        @input="onPendingSearchInput"
-                    />
-                    <p v-if="selectedPending" class="mt-1 text-xs text-horizon-500">
-                        Selecionada: {{ selectedPending.description }}
-                        <button type="button" class="ml-1 text-cta underline" @click="clearPending">limpar</button>
-                    </p>
-                    <ul
-                        v-if="recurringOpen"
-                        class="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md border border-slate-200 bg-white shadow-lg"
-                    >
-                        <li v-if="!filteredPending.length" class="px-3 py-2 text-sm text-horizon-500">Nenhuma encontrada.</li>
-                        <li
-                            v-for="item in filteredPending"
-                            :key="item.id"
-                            class="cursor-pointer border-b border-slate-100 px-3 py-2 text-sm last:border-0 hover:bg-amber-50"
-                            @mousedown.prevent="selectPending(item); recurringOpen = false"
-                        >
-                            <span class="font-medium text-navy-700">{{ item.description }}</span>
-                            <span class="mt-0.5 block text-xs text-horizon-500">
-                                {{ item.date.split('-').reverse().join('/') }} · {{ formatBRL(item.amount) }} ·
-                                <span :class="item.overdue ? 'text-red-600' : 'text-amber-700'">
-                                    {{ item.overdue ? 'vencida' : 'pendente' }}
-                                </span>
-                            </span>
-                        </li>
-                    </ul>
-                    <InputError class="mt-2" :message="form.errors.recurring_transaction_id" />
-                </div>
-
-                <div
-                    v-if="form.type === 'expense' && recurringBills.length && !form.is_installment && !form.recurring_transaction_id"
-                    class="relative"
-                >
-                    <InputLabel :value="isEdit ? 'Conta fixa' : 'Vincular a conta fixa (opcional)'" />
-                    <template v-if="form.recurring_bill_id && !billPickerOpen">
-                        <p class="mt-2 text-sm text-horizon-600">
-                            Vinculada: <span class="font-medium text-navy-700">{{ linkedBillLabel }}</span>
-                            <button type="button" class="ml-1 text-cta underline" @click="clearBill">limpar</button>
-                        </p>
-                    </template>
-                    <template v-else>
+                <div class="space-y-4 rounded-[20px] bg-lightPrimary/80 p-4 ring-1 ring-horizon-100 sm:p-5">
+                    <div>
+                        <label class="text-sm font-semibold text-navy-700" for="description">Descrição</label>
                         <TextInput
-                            type="search"
-                            class="mt-1 block w-full"
-                            v-model="billSearch"
-                            placeholder="Buscar conta fixa ou variável…"
-                            autocomplete="off"
-                            @focus="billOpen = true"
-                            @blur="billOpen = false"
-                            @input="onBillSearchInput"
+                            id="description"
+                            type="text"
+                            class="mt-1.5 block w-full rounded-xl border-horizon-200 bg-white px-4 py-3 text-lg font-medium text-navy-700"
+                            v-model="form.description"
+                            required
                         />
-                        <ul
-                            v-if="billOpen"
-                            class="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md border border-slate-200 bg-white shadow-lg"
-                        >
-                            <li v-if="!filteredBills.length" class="px-3 py-2 text-sm text-horizon-500">Nenhuma encontrada.</li>
-                            <li
-                                v-for="item in filteredBills"
-                                :key="item.id"
-                                class="cursor-pointer border-b border-slate-100 px-3 py-2 text-sm last:border-0 hover:bg-amber-50"
-                                @mousedown.prevent="selectBill(item)"
-                            >
-                                {{ item.label }}
-                            </li>
-                        </ul>
-                    </template>
-                    <InputError class="mt-2" :message="form.errors.recurring_bill_id" />
+                        <InputError class="mt-2" :message="form.errors.description" />
+                    </div>
+                    <div>
+                        <label class="text-sm font-semibold text-navy-700" for="amount">Valor</label>
+                        <MoneyInput id="amount" class="mt-1.5" size="lg" v-model="form.amount" required />
+                        <InputError class="mt-2" :message="form.errors.amount" />
+                    </div>
                 </div>
 
-                <div v-if="!form.is_installment">
-                    <InputLabel for="amount" value="Valor (R$)" />
-                    <MoneyInput id="amount" class="mt-1" v-model="form.amount" required />
-                    <InputError class="mt-2" :message="form.errors.amount" />
-                </div>
-
-                <div>
-                    <InputLabel for="description" value="Descrição" />
-                    <TextInput id="description" type="text" class="mt-1 block w-full" v-model="form.description" required />
-                    <InputError class="mt-2" :message="form.errors.description" />
-                </div>
-
-                <div>
-                    <InputLabel value="Categoria" />
-                    <select v-model="form.category_id" class="mt-1 block w-full rounded-md border-slate-300" required>
-                        <option value="" disabled>Selecione</option>
-                        <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-                    </select>
-                    <InputError class="mt-2" :message="form.errors.category_id" />
-                </div>
-
-                <div v-if="form.type === 'income'" data-tour="tx-bank">
-                    <InputLabel value="Conta (opcional)" />
-                    <select v-model="form.bank_account_id" class="mt-1 block w-full rounded-md border-slate-300">
-                        <option value="">Sem conta</option>
-                        <option v-for="account in bankAccounts" :key="account.id" :value="account.id">
-                            {{ account.name }}
-                        </option>
-                    </select>
-                    <InputError class="mt-2" :message="form.errors.bank_account_id" />
-                </div>
-
-                <div v-else data-tour="tx-payment">
-                    <InputLabel value="Forma de pagamento" />
-                    <select v-model="form.payment_selection" class="mt-1 block w-full rounded-md border-slate-300" required>
-                        <optgroup label="Geral">
+                <div class="space-y-4">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-horizon-500">Detalhes</p>
+                    <OwnershipFields
+                        v-if="!isEdit"
+                        :form="form"
+                        :members="members"
+                        :companies="companies"
+                    />
+                    <div>
+                        <InputLabel value="Categoria" />
+                        <p class="mt-2 text-sm font-medium text-teal-800">Investimento</p>
+                        <p class="mt-1 text-xs text-horizon-500">Categoria padrão do sistema (automática).</p>
+                        <InputError class="mt-2" :message="form.errors.category_id" />
+                    </div>
+                    <div>
+                        <InputLabel value="Forma de pagamento" />
+                        <select v-model="form.payment_selection" class="mt-1 block w-full rounded-md border-slate-300" required>
                             <option v-for="m in PAYMENT_METHODS" :key="m.value" :value="m.value">{{ m.label }}</option>
-                        </optgroup>
-                        <optgroup v-if="paymentCards.length" label="Cartões">
-                            <option
-                                v-for="card in paymentCards"
-                                :key="card.id"
-                                :value="`card:${card.id}`"
-                            >
-                                {{ formatCardLabel(card) }}{{ card.user?.name ? ` (${card.user.name})` : '' }}
-                            </option>
-                        </optgroup>
-                    </select>
-                    <InputError class="mt-2" :message="form.errors.payment_method || form.errors.payment_card_id" />
-
-                    <div v-if="needsBankAccount" class="mt-3" data-tour="tx-bank">
+                        </select>
+                        <InputError class="mt-2" :message="form.errors.payment_method" />
+                    </div>
+                    <div v-if="needsBankAccount">
                         <InputLabel value="Conta bancária (opcional)" />
                         <select v-model="form.bank_account_id" class="mt-1 block w-full rounded-md border-slate-300">
                             <option value="">Sem conta</option>
@@ -814,58 +705,239 @@ const submit = () => {
                         </select>
                         <InputError class="mt-2" :message="form.errors.bank_account_id" />
                     </div>
-
-                    <label
-                        v-if="isCreditCard && !isEdit && !form.recurring_transaction_id"
-                        class="mt-3 flex items-center gap-2 text-sm text-navy-700"
-                    >
-                        <input v-model="form.is_installment" type="checkbox" class="rounded border-slate-300 text-brand-500 focus:ring-brand-500" />
-                        Compra parcelada
-                    </label>
-                    <InputError class="mt-2" :message="form.errors.is_installment" />
-                </div>
-
-                <div v-if="form.is_installment" class="space-y-4 rounded-lg bg-amber-50/60 p-4 ring-1 ring-amber-100">
                     <div>
-                        <InputLabel for="total_amount" value="Valor total (R$)" />
-                        <MoneyInput
-                            id="total_amount"
-                            class="mt-1"
-                            v-model="form.total_amount"
-                            required
-                            @update:model-value="installmentSource = 'total'"
-                        />
-                        <InputError class="mt-2" :message="form.errors.total_amount" />
+                        <InputLabel for="date" value="Data" />
+                        <TextInput id="date" type="date" class="mt-1 block w-full" v-model="form.date" required />
+                        <InputError class="mt-2" :message="form.errors.date" />
                     </div>
+                    <p class="text-xs text-horizon-500">
+                        Conta como saída de caixa, mas não entra nos gastos de consumo — fica separado como investimento.
+                    </p>
+                </div>
+            </template>
+
+            <template v-else>
+                <div class="space-y-4 rounded-[20px] bg-lightPrimary/80 p-4 ring-1 ring-horizon-100 sm:p-5">
                     <div>
-                        <InputLabel for="installments_count" value="Quantidade de parcelas" />
+                        <label class="text-sm font-semibold text-navy-700" for="description">Descrição</label>
                         <TextInput
-                            id="installments_count"
-                            type="number"
-                            min="2"
-                            max="48"
-                            class="mt-1 block w-full"
-                            v-model="form.installments_count"
+                            id="description"
+                            type="text"
+                            class="mt-1.5 block w-full rounded-xl border-horizon-200 bg-white px-4 py-3 text-lg font-medium text-navy-700"
+                            v-model="form.description"
                             required
                         />
-                        <InputError class="mt-2" :message="form.errors.installments_count" />
+                        <InputError class="mt-2" :message="form.errors.description" />
                     </div>
-                    <div>
-                        <InputLabel for="installment_amount" value="Valor da parcela (R$)" />
-                        <MoneyInput
-                            id="installment_amount"
-                            class="mt-1"
-                            v-model="form.installment_amount"
-                            @update:model-value="installmentSource = 'parcel'"
-                        />
-                        <InputError class="mt-2" :message="form.errors.installment_amount" />
+                    <div v-if="!form.is_installment">
+                        <label class="text-sm font-semibold text-navy-700" for="amount">Valor</label>
+                        <MoneyInput id="amount" class="mt-1.5" size="lg" v-model="form.amount" required />
+                        <InputError class="mt-2" :message="form.errors.amount" />
                     </div>
                 </div>
 
-                <div>
-                    <InputLabel for="date" :value="form.is_installment ? 'Data da compra' : 'Data'" />
-                    <TextInput id="date" type="date" class="mt-1 block w-full" v-model="form.date" required />
-                    <InputError class="mt-2" :message="form.errors.date" />
+                <div class="space-y-4">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-horizon-500">Detalhes</p>
+
+                    <OwnershipFields
+                        v-if="!isEdit && form.type !== 'transfer'"
+                        :form="form"
+                        :members="members"
+                        :companies="companies"
+                    />
+
+                    <div v-if="hasRecurringPicker" class="relative" @focusout="onRecurringPickerFocusOut">
+                        <div v-if="hasLinkedRecurring" class="flex items-start justify-between gap-3 rounded-xl bg-horizon-50 px-3 py-2.5 ring-1 ring-horizon-200">
+                            <div class="min-w-0">
+                                <p class="text-[11px] font-semibold uppercase tracking-wide text-horizon-500">Conta fixa</p>
+                                <p class="truncate text-sm font-medium text-navy-700">
+                                    {{ selectedPending ? selectedPending.description : linkedBillLabel }}
+                                </p>
+                                <p v-if="selectedPending" class="mt-0.5 text-xs text-horizon-500">
+                                    {{ selectedPending.date.split('-').reverse().join('/') }}
+                                    · {{ formatBRL(selectedPending.amount) }}
+                                    ·
+                                    <span :class="selectedPending.overdue ? 'text-red-600' : 'text-amber-700'">
+                                        {{ selectedPending.overdue ? 'vencida' : 'pendente' }}
+                                    </span>
+                                </p>
+                            </div>
+                            <div class="flex shrink-0 items-center gap-2 text-xs">
+                                <button type="button" class="text-horizon-600 underline-offset-2 hover:text-navy-700 hover:underline" @click="toggleRecurringPicker">
+                                    Trocar
+                                </button>
+                                <button type="button" class="text-horizon-600 underline-offset-2 hover:text-red-600 hover:underline" @click="clearRecurring">
+                                    Remover
+                                </button>
+                            </div>
+                        </div>
+                        <button
+                            v-else
+                            type="button"
+                            class="inline-flex w-full items-center gap-2 rounded-xl border border-dashed border-horizon-300 bg-transparent px-3 py-2 text-left text-sm text-horizon-600 transition hover:border-horizon-400 hover:bg-horizon-50 hover:text-navy-700"
+                            :aria-expanded="recurringOpen"
+                            @click="toggleRecurringPicker"
+                        >
+                            <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-horizon-300 text-base leading-none">+</span>
+                            Vincular conta fixa
+                        </button>
+
+                        <div
+                            v-if="recurringOpen"
+                            class="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-horizon-200 bg-white shadow-lg"
+                        >
+                            <div class="border-b border-horizon-100 p-2">
+                                <TextInput
+                                    ref="recurringSearchInput"
+                                    type="search"
+                                    class="block w-full rounded-lg border-horizon-200 text-sm"
+                                    v-model="recurringSearch"
+                                    placeholder="Buscar conta ou pendente…"
+                                    autocomplete="off"
+                                />
+                            </div>
+                            <ul class="max-h-56 overflow-auto">
+                                <li v-if="recurringPickerEmpty" class="px-3 py-2 text-sm text-horizon-500">Nenhuma encontrada.</li>
+                                <li
+                                    v-if="filteredPending.length"
+                                    class="bg-slate-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-horizon-500"
+                                >
+                                    Pendentes
+                                </li>
+                                <li
+                                    v-for="item in filteredPending"
+                                    :key="`pending-${item.id}`"
+                                    class="cursor-pointer border-b border-slate-100 px-3 py-2 text-sm last:border-0 hover:bg-amber-50"
+                                    @mousedown.prevent="selectPending(item)"
+                                >
+                                    <span class="font-medium text-navy-700">{{ item.description }}</span>
+                                    <span class="mt-0.5 block text-xs text-horizon-500">
+                                        {{ item.date.split('-').reverse().join('/') }} · {{ formatBRL(item.amount) }} ·
+                                        <span :class="item.overdue ? 'text-red-600' : 'text-amber-700'">
+                                            {{ item.overdue ? 'vencida' : 'pendente' }}
+                                        </span>
+                                    </span>
+                                </li>
+                                <li
+                                    v-if="filteredBills.length"
+                                    class="bg-slate-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-horizon-500"
+                                >
+                                    Contas
+                                </li>
+                                <li
+                                    v-for="item in filteredBills"
+                                    :key="`bill-${item.id}`"
+                                    class="cursor-pointer border-b border-slate-100 px-3 py-2 text-sm last:border-0 hover:bg-amber-50"
+                                    @mousedown.prevent="selectBill(item)"
+                                >
+                                    {{ item.label }}
+                                </li>
+                            </ul>
+                        </div>
+                        <InputError class="mt-2" :message="form.errors.recurring_transaction_id || form.errors.recurring_bill_id" />
+                    </div>
+
+                    <div>
+                        <InputLabel value="Categoria" />
+                        <select v-model="form.category_id" class="mt-1 block w-full rounded-md border-slate-300" required>
+                            <option value="" disabled>Selecione</option>
+                            <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+                        </select>
+                        <InputError class="mt-2" :message="form.errors.category_id" />
+                    </div>
+
+                    <div v-if="form.type === 'income'" data-tour="tx-bank">
+                        <InputLabel value="Conta (opcional)" />
+                        <select v-model="form.bank_account_id" class="mt-1 block w-full rounded-md border-slate-300">
+                            <option value="">Sem conta</option>
+                            <option v-for="account in bankAccounts" :key="account.id" :value="account.id">
+                                {{ account.name }}
+                            </option>
+                        </select>
+                        <InputError class="mt-2" :message="form.errors.bank_account_id" />
+                    </div>
+
+                    <div v-else data-tour="tx-payment">
+                        <InputLabel value="Forma de pagamento" />
+                        <select v-model="form.payment_selection" class="mt-1 block w-full rounded-md border-slate-300" required>
+                            <optgroup label="Geral">
+                                <option v-for="m in PAYMENT_METHODS" :key="m.value" :value="m.value">{{ m.label }}</option>
+                            </optgroup>
+                            <optgroup v-if="paymentCards.length" label="Cartões">
+                                <option
+                                    v-for="card in paymentCards"
+                                    :key="card.id"
+                                    :value="`card:${card.id}`"
+                                >
+                                    {{ formatCardLabel(card) }}{{ card.user?.name ? ` (${card.user.name})` : '' }}
+                                </option>
+                            </optgroup>
+                        </select>
+                        <InputError class="mt-2" :message="form.errors.payment_method || form.errors.payment_card_id" />
+
+                        <div v-if="needsBankAccount" class="mt-3" data-tour="tx-bank">
+                            <InputLabel value="Conta bancária (opcional)" />
+                            <select v-model="form.bank_account_id" class="mt-1 block w-full rounded-md border-slate-300">
+                                <option value="">Sem conta</option>
+                                <option v-for="account in bankAccounts" :key="account.id" :value="account.id">
+                                    {{ account.name }}
+                                </option>
+                            </select>
+                            <InputError class="mt-2" :message="form.errors.bank_account_id" />
+                        </div>
+
+                        <label
+                            v-if="isCreditCard && !isEdit && !form.recurring_transaction_id"
+                            class="mt-3 flex items-center gap-2 text-sm text-navy-700"
+                        >
+                            <input v-model="form.is_installment" type="checkbox" class="rounded border-slate-300 text-brand-500 focus:ring-brand-500" />
+                            Compra parcelada
+                        </label>
+                        <InputError class="mt-2" :message="form.errors.is_installment" />
+                    </div>
+
+                    <div v-if="form.is_installment" class="space-y-4 rounded-lg bg-amber-50/60 p-4 ring-1 ring-amber-100">
+                        <div>
+                            <InputLabel for="total_amount" value="Valor total (R$)" />
+                            <MoneyInput
+                                id="total_amount"
+                                class="mt-1"
+                                v-model="form.total_amount"
+                                required
+                                @update:model-value="installmentSource = 'total'"
+                            />
+                            <InputError class="mt-2" :message="form.errors.total_amount" />
+                        </div>
+                        <div>
+                            <InputLabel for="installments_count" value="Quantidade de parcelas" />
+                            <TextInput
+                                id="installments_count"
+                                type="number"
+                                min="2"
+                                max="48"
+                                class="mt-1 block w-full"
+                                v-model="form.installments_count"
+                                required
+                            />
+                            <InputError class="mt-2" :message="form.errors.installments_count" />
+                        </div>
+                        <div>
+                            <InputLabel for="installment_amount" value="Valor da parcela (R$)" />
+                            <MoneyInput
+                                id="installment_amount"
+                                class="mt-1"
+                                v-model="form.installment_amount"
+                                @update:model-value="installmentSource = 'parcel'"
+                            />
+                            <InputError class="mt-2" :message="form.errors.installment_amount" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <InputLabel for="date" :value="form.is_installment ? 'Data da compra' : 'Data'" />
+                        <TextInput id="date" type="date" class="mt-1 block w-full" v-model="form.date" required />
+                        <InputError class="mt-2" :message="form.errors.date" />
+                    </div>
                 </div>
             </template>
 

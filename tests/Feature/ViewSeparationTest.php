@@ -112,6 +112,30 @@ class ViewSeparationTest extends TestCase
             'created_by' => $owner->id,
             'description' => 'Lanche do filho',
             'amount' => 33.5,
+            'is_shared' => false,
+        ]);
+    }
+
+    public function test_new_transaction_is_never_shared_even_if_flag_is_sent(): void
+    {
+        ['owner' => $owner, 'category' => $category] = $this->family();
+
+        $this->actingAs($owner)
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_EXPENSE,
+                'amount' => 20,
+                'description' => 'Padaria',
+                'category_id' => $category->id,
+                'date' => now()->toDateString(),
+                'payment_method' => Transaction::PAYMENT_CASH,
+                'is_shared' => true,
+            ])
+            ->assertRedirect(route('transactions.index'));
+
+        $this->assertDatabaseHas('transactions', [
+            'description' => 'Padaria',
+            'user_id' => $owner->id,
+            'is_shared' => false,
         ]);
     }
 

@@ -46,13 +46,13 @@ class HandleInertiaRequests extends Middleware
                 ->values()
                 ->all();
 
-            $focusId = $ctx->focusMemberId() ?? $user->id;
             $viewCompanies = Company::query()
-                ->where('user_id', $focusId)
+                ->where('account_id', $user->account_id)
                 ->orderBy('name')
-                ->get(['id', 'name', 'cnpj'])
+                ->get(['id', 'name', 'cnpj', 'user_id'])
                 ->map(fn (Company $c) => [
                     'id' => $c->id,
+                    'user_id' => $c->user_id,
                     'name' => $c->name,
                     'cnpj' => $c->cnpj,
                     'cnpj_formatted' => $c->formattedCnpj(),

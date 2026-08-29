@@ -188,12 +188,8 @@ class TransactionRequest extends FormRequest
     {
         $this->merge([
             'is_installment' => $this->boolean('is_installment'),
-            'is_shared' => $this->boolean('is_shared'),
+            'is_shared' => false,
         ]);
-
-        if ($this->boolean('is_shared')) {
-            $this->merge(['company_id' => null]);
-        }
 
         $needsBank = in_array($this->input('payment_method'), Transaction::BANK_LINKED_PAYMENT_METHODS, true);
 

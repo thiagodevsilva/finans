@@ -28,7 +28,7 @@
 | BalanceAnchor | Âncora de saldo de caixa **por membro** (`balance_anchors.user_id`) |
 | InstallmentPlan | Compra parcelada (`installment_plans`) — gera N expenses |
 | RecurringBill | Conta fixa (`recurring_bills`) — gera lançamentos `planned` |
-| Transaction | `income`, `expense`, `transfer` (fatura) ou `investment`; pode ser `is_shared` |
+| Transaction | `income`, `expense`, `transfer` (fatura) ou `investment`; sempre de um membro (`user_id`) |
 | SupportTicket | Chamado de suporte (`support_tickets`) — título, descrição, anexos e conversa in-app; SLA 72h úteis |
 
 ## Estrutura
@@ -63,7 +63,7 @@ database/migrations/
 9. Parcelas: UI do mês mostra só a parcela do período; detalhe da compra no plano.
 10. Contas fixas: `planned` até confirmar; só confirmadas contam como gasto. Variáveis (`kind=variable`) não geram planned — vários lançamentos abatem a estimativa. No dashboard, % das contas fixas é por **valor**.
 11. **Testes nunca usam o MySQL do app.** A suite força `sqlite :memory:` (`phpunit.xml` + `CreatesApplication`). Requer extensão `pdo_sqlite` (`php8.1-sqlite3`).
-12. `is_shared` só na visão Família; CNPJ (`company_id`) é tag, não carteira.
+12. Gasto sempre fica no membro (`user_id`); CNPJ (`company_id`) é tag, não carteira.
 
 ## Skills do projeto
 

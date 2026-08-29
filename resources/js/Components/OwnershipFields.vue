@@ -8,7 +8,6 @@ const props = defineProps({
     form: { type: Object, required: true },
     members: { type: Array, default: () => [] },
     companies: { type: Array, default: () => [] },
-    showShared: { type: Boolean, default: true },
     disabled: { type: Boolean, default: false },
 });
 
@@ -21,14 +20,8 @@ const memberCompanies = computed(() => {
     return (props.companies || []).filter((c) => c.user_id === ownerId);
 });
 
-watch(
-    () => props.form.is_shared,
-    (shared) => {
-        if (shared) {
-            props.form.company_id = '';
-        }
-    },
-);
+const showMemberSelect = computed(() => isOwner.value && props.members.length > 1);
+const showFields = computed(() => showMemberSelect.value || memberCompanies.value.length > 0);
 
 watch(
     () => props.form.user_id,
@@ -44,8 +37,8 @@ watch(
 </script>
 
 <template>
-    <div class="space-y-3 rounded-xl border border-horizon-200 bg-lightPrimary/60 p-3">
-        <div v-if="isOwner && members.length > 1">
+    <div v-if="showFields" class="space-y-3 rounded-xl border border-horizon-200 bg-lightPrimary/60 p-3">
+        <div v-if="showMemberSelect">
             <InputLabel for="owner_user_id" value="Em nome de" />
             <select
                 id="owner_user_id"
@@ -58,18 +51,7 @@ watch(
             <InputError class="mt-1" :message="form.errors.user_id" />
         </div>
 
-        <label v-if="showShared" class="flex items-center gap-2 text-sm text-navy-700">
-            <input
-                v-model="form.is_shared"
-                type="checkbox"
-                class="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                :disabled="disabled"
-            />
-            Gasto / conta da família (só aparece na visão Família)
-        </label>
-        <InputError v-if="showShared" class="mt-1" :message="form.errors.is_shared" />
-
-        <div v-if="!form.is_shared && memberCompanies.length">
+        <div v-if="memberCompanies.length">
             <InputLabel for="company_id" value="CNPJ (opcional)" />
             <select
                 id="company_id"

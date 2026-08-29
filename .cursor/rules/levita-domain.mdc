@@ -67,8 +67,8 @@ alwaysApply: true
 - **Saldo (caixa)** = âncora **por membro** + entradas − saídas de dinheiro daquele `user_id`. Visão Família soma os caixas.
 - **Saldo do mês** = income − saídas de dinheiro do mês − investment (confirmed), filtrados pelo ViewContext.
 - Débito e débito automático saem do caixa.
-- `is_shared` (gasto/conta da família): só listado na visão Família; o caixa ainda debita o `user_id` pagador.
-- `company_id` (CNPJ): tag leve; shared ⇒ sem CNPJ.
+- Gasto sempre pertence a um membro (`user_id`). Não há “gasto da família”: transações novas gravam `is_shared = false`. A coluna legado ainda existe; visão Eu/Membro oculta `is_shared = true`.
+- `company_id` (CNPJ): tag leve no membro.
 
 ## Conta
 
