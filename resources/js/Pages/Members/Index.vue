@@ -41,7 +41,7 @@ const roleLabel = (role) => (role === 'owner' ? 'Dono' : 'Membro');
     <AppLayout>
         <div class="mb-6">
             <h1 class="text-2xl font-bold text-slate-900">Membros</h1>
-            <p class="text-sm text-slate-500">Pessoas com acesso à conta familiar</p>
+            <p class="text-sm text-slate-500">Pessoas com acesso à conta</p>
         </div>
 
         <form v-if="canManage" class="mb-8 grid max-w-3xl gap-3 rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:grid-cols-4" @submit.prevent="submit">

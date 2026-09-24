@@ -21,7 +21,7 @@
 | Dependent | `users.role = dependent` — lança/vê; sem categorias/membros |
 | Category | Categoria da conta |
 | Company | CNPJ tag (`companies`) — filtro leve por PJ |
-| ViewContext | Visão Família / Eu / Membro (+ filtro CNPJ) |
+| ViewContext | Visão Todos / Eu / Membro (+ filtro CNPJ) |
 | PaymentCard | Cartão (`payment_cards`) — crédito tem `closing_day`/`due_day`; benefício não debita caixa nem vira fatura |
 | CreditCardInvoice | Fatura do cartão de crédito (`credit_card_invoices`) |
 | BankAccount | Conta bancária opcional (`bank_accounts`) — entradas e pagamento de fatura |
@@ -59,7 +59,7 @@ database/migrations/
 5. Identidade visual: amarelo `#ffc107` primário; azul `#2563eb` só em CTAs.
 6. Entradas usam conta bancária opcional; saídas usam forma de pagamento (e cartão quando aplicável). Débito / débito automático saem do caixa.
 7. **Despesa = compra.** Pagamento de fatura é `type=transfer` e **não** entra em totais de gasto.
-8. Relatórios/dashboard somam só `status=confirmed` e `type` income/expense (nunca transfer), filtrados pelo ViewContext. **Saldo** = caixa por membro (Família = soma); **saldo do mês** = income − saídas de dinheiro do mês − investment.
+8. Relatórios/dashboard somam só `status=confirmed` e `type` income/expense (nunca transfer), filtrados pelo ViewContext. **Saldo** = caixa por membro (Todos = soma); **saldo do mês** = income − saídas de dinheiro do mês − investment.
 9. Parcelas: UI do mês mostra só a parcela do período; detalhe da compra no plano.
 10. Contas fixas: `planned` até confirmar; só confirmadas contam como gasto. Variáveis (`kind=variable`) não geram planned — vários lançamentos abatem a estimativa. No dashboard, % das contas fixas é por **valor**.
 11. **Testes nunca usam o MySQL do app.** A suite força `sqlite :memory:` (`phpunit.xml` + `CreatesApplication`). Requer extensão `pdo_sqlite` (`php8.1-sqlite3`).

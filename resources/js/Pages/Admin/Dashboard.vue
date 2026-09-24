@@ -151,7 +151,7 @@ const formatLastSeen = (value) => {
                             <tr class="border-b border-horizon-100 text-xs font-semibold uppercase tracking-wide text-horizon-500">
                                 <th class="px-2 py-2 font-semibold">Nome</th>
                                 <th class="px-2 py-2 font-semibold">E-mail</th>
-                                <th class="px-2 py-2 font-semibold">Família</th>
+                                <th class="px-2 py-2 font-semibold">Conta</th>
                                 <th class="px-2 py-2 font-semibold">Última vez online</th>
                             </tr>
                         </thead>

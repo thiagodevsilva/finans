@@ -62,7 +62,7 @@ const optionsForMember = (member) => {
 };
 
 const selectOptions = computed(() => {
-    const opts = [{ value: 'family', label: 'Família' }];
+    const opts = [{ value: 'family', label: 'Todos' }];
     for (const member of membersForSelect.value) {
         opts.push(...optionsForMember(member));
     }

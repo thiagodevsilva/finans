@@ -112,7 +112,7 @@ const slaClass = (status) => {
                         <thead>
                             <tr class="border-b border-horizon-100 text-xs font-semibold uppercase tracking-wide text-horizon-500">
                                 <th class="px-2 py-2">Título</th>
-                                <th class="px-2 py-2">Família</th>
+                                <th class="px-2 py-2">Conta</th>
                                 <th class="px-2 py-2">Status</th>
                                 <th class="px-2 py-2">SLA</th>
                                 <th class="px-2 py-2">Aberto em</th>

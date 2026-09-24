@@ -183,7 +183,7 @@ class ViewContext
         return match ($this->scope) {
             self::SCOPE_MINE => 'Eu',
             self::SCOPE_MEMBER => $this->focusMember()?->name ?? 'Membro',
-            default => 'Família',
+            default => 'Todos',
         };
     }
 
