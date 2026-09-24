@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\SupportTicketActivityMail;
 use App\Models\Account;
 use App\Models\SupportTicket;
 use App\Models\User;
@@ -9,6 +10,7 @@ use App\Services\SupportSlaService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -258,5 +260,86 @@ class SupportTicketTest extends TestCase
 
         $ticket->update(['first_responded_at' => now()->subMinutes(30)]);
         $this->assertSame('missed', $service->statusLabel($ticket->fresh()));
+    }
+
+    public function test_support_activity_emails_notify_configured_address(): void
+    {
+        config(['support.notify_email' => 'thiagows72@gmail.com']);
+        Mail::fake();
+
+        $account = Account::factory()->create(['name' => 'Família Teste']);
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('support-tickets.store'), [
+                'title' => 'Problema no saldo',
+                'description' => 'O saldo não bate.',
+            ])
+            ->assertRedirect();
+
+        $ticket = SupportTicket::withoutGlobalScopes()->where('title', 'Problema no saldo')->first();
+        $this->assertNotNull($ticket);
+
+        Mail::assertSent(SupportTicketActivityMail::class, function (SupportTicketActivityMail $mail) use ($ticket) {
+            return $mail->hasTo('thiagows72@gmail.com')
+                && $mail->event === 'opened'
+                && $mail->ticket->is($ticket);
+        });
+
+        $this->actingAs($owner)
+            ->post(route('support-tickets.replies.store', $ticket), [
+                'body' => 'Mais detalhes aqui.',
+            ])
+            ->assertRedirect();
+
+        Mail::assertSent(SupportTicketActivityMail::class, fn (SupportTicketActivityMail $mail) => $mail->event === 'replied');
+
+        $this->actingAs($owner)
+            ->post(route('support-tickets.close', $ticket), [
+                'closed_reason' => 'Resolvido',
+            ])
+            ->assertRedirect();
+
+        Mail::assertSent(SupportTicketActivityMail::class, fn (SupportTicketActivityMail $mail) => $mail->event === 'closed');
+    }
+
+    public function test_support_emails_skipped_when_notify_email_empty(): void
+    {
+        config(['support.notify_email' => null]);
+        Mail::fake();
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('support-tickets.store'), [
+                'title' => 'Sem e-mail',
+                'description' => 'Não deve notificar.',
+            ])
+            ->assertRedirect();
+
+        Mail::assertNothingSent();
+    }
+
+    public function test_reply_can_include_image_attachments(): void
+    {
+        Storage::fake('local');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $ticket = SupportTicket::factory()->forUser($owner)->create();
+        $image = UploadedFile::fake()->image('extra.png', 80, 80)->size(100);
+
+        $this->actingAs($owner)
+            ->post(route('support-tickets.replies.store', $ticket), [
+                'body' => 'Segue o print',
+                'attachments' => [$image],
+            ])
+            ->assertRedirect();
+
+        $reply = $ticket->replies()->first();
+        $this->assertNotNull($reply);
+        $this->assertSame(1, $reply->attachments()->count());
+        $this->assertSame($reply->id, $reply->attachments()->first()->support_ticket_reply_id);
     }
 }

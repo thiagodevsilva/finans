@@ -8,6 +8,7 @@ use App\Http\Requests\StoreSupportTicketRequest;
 use App\Models\SupportTicket;
 use App\Models\SupportTicketAttachment;
 use App\Services\SupportSlaService;
+use App\Services\SupportTicketNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class SupportTicketController extends Controller
 {
     public function __construct(
-        private SupportSlaService $sla
+        private SupportSlaService $sla,
+        private SupportTicketNotifier $notifier,
     ) {
     }
 
@@ -96,6 +98,12 @@ class SupportTicketController extends Controller
             return $ticket;
         });
 
+        $this->notifier->notify(
+            $ticket,
+            'opened',
+            mb_substr($ticket->description, 0, 500)
+        );
+
         return redirect()
             ->route('support-tickets.show', $ticket)
             ->with('success', 'Chamado aberto com sucesso.');
@@ -107,8 +115,9 @@ class SupportTicketController extends Controller
 
         $supportTicket->load([
             'user:id,name',
-            'attachments',
+            'attachments' => fn ($q) => $q->whereNull('support_ticket_reply_id'),
             'replies.user:id,name',
+            'replies.attachments',
             'closedByUser:id,name',
         ]);
 
@@ -123,15 +132,37 @@ class SupportTicketController extends Controller
     {
         $this->authorize('reply', $supportTicket);
 
-        $supportTicket->replies()->create([
-            'user_id' => $request->user()->id,
-            'body' => $request->validated('body'),
-            'is_staff' => false,
-        ]);
+        $reply = DB::transaction(function () use ($request, $supportTicket) {
+            $reply = $supportTicket->replies()->create([
+                'user_id' => $request->user()->id,
+                'body' => $request->validated('body'),
+                'is_staff' => false,
+            ]);
 
-        if ($supportTicket->status === SupportTicket::STATUS_ANSWERED) {
-            $supportTicket->update(['status' => SupportTicket::STATUS_OPEN]);
-        }
+            foreach ($request->file('attachments', []) as $file) {
+                $path = $file->store("support-tickets/{$supportTicket->id}", 'local');
+
+                $supportTicket->attachments()->create([
+                    'support_ticket_reply_id' => $reply->id,
+                    'path' => $path,
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime' => $file->getMimeType() ?: $file->getClientMimeType(),
+                    'size' => $file->getSize(),
+                ]);
+            }
+
+            if ($supportTicket->status === SupportTicket::STATUS_ANSWERED) {
+                $supportTicket->update(['status' => SupportTicket::STATUS_OPEN]);
+            }
+
+            return $reply;
+        });
+
+        $this->notifier->notify(
+            $supportTicket->fresh(),
+            'replied',
+            mb_substr($reply->body, 0, 500)
+        );
 
         return back()->with('success', 'Mensagem enviada.');
     }
@@ -140,12 +171,16 @@ class SupportTicketController extends Controller
     {
         $this->authorize('close', $supportTicket);
 
+        $reason = $request->validated('closed_reason');
+
         $supportTicket->update([
             'status' => SupportTicket::STATUS_CLOSED,
-            'closed_reason' => $request->validated('closed_reason'),
+            'closed_reason' => $reason,
             'closed_by' => $request->user()->id,
             'closed_at' => now(),
         ]);
+
+        $this->notifier->notify($supportTicket->fresh(), 'closed', $reason);
 
         return redirect()
             ->route('support-tickets.show', $supportTicket)
@@ -170,6 +205,12 @@ class SupportTicketController extends Controller
 
     private function serializeTicket(SupportTicket $ticket): array
     {
+        $mapAttachment = fn (SupportTicketAttachment $a) => [
+            'id' => $a->id,
+            'original_name' => $a->original_name,
+            'url' => route('support-tickets.attachments.show', $a),
+        ];
+
         return [
             'id' => $ticket->id,
             'title' => $ticket->title,
@@ -181,17 +222,14 @@ class SupportTicketController extends Controller
             'closed_by_name' => $ticket->closedByUser?->name,
             'closed_at' => $ticket->closed_at?->toDateTimeString(),
             'created_at' => $ticket->created_at?->toDateTimeString(),
-            'attachments' => $ticket->attachments->map(fn (SupportTicketAttachment $a) => [
-                'id' => $a->id,
-                'original_name' => $a->original_name,
-                'url' => route('support-tickets.attachments.show', $a),
-            ]),
+            'attachments' => $ticket->attachments->map($mapAttachment),
             'replies' => $ticket->replies->map(fn ($reply) => [
                 'id' => $reply->id,
                 'body' => $reply->body,
                 'is_staff' => $reply->is_staff,
                 'author_name' => $reply->user?->name,
                 'created_at' => $reply->created_at?->toDateTimeString(),
+                'attachments' => $reply->attachments->map($mapAttachment),
             ]),
         ];
     }

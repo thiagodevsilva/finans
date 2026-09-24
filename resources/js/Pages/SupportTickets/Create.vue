@@ -4,8 +4,8 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import { useSupportAttachments } from '@/Composables/useSupportAttachments';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
 
 const form = useForm({
     title: '',
@@ -13,28 +13,14 @@ const form = useForm({
     attachments: [],
 });
 
-const fileInput = ref(null);
-const previews = ref([]);
-
-const onFilesChange = (event) => {
-    const files = Array.from(event.target.files || []).slice(0, 5);
-    form.attachments = files;
-    previews.value = files.map((file) => ({
-        name: file.name,
-        size: file.size,
-        url: URL.createObjectURL(file),
-    }));
-};
+const { previews, pasteHint, onFilesChange, onPaste, removeAt, formatSize } = useSupportAttachments(
+    (files) => { form.attachments = files; },
+);
 
 const submit = () => {
     form.post(route('support-tickets.store'), {
         forceFormData: true,
     });
-};
-
-const formatSize = (bytes) => {
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 </script>
 
@@ -62,20 +48,24 @@ const formatSize = (bytes) => {
                     rows="6"
                     required
                     class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+                    @paste="onPaste"
                 />
+                <p class="mt-1 text-xs text-slate-500">
+                    Cole um print com Ctrl+V (ou Cmd+V) na descrição.
+                </p>
                 <InputError class="mt-1" :message="form.errors.description" />
             </div>
 
             <div>
                 <InputLabel value="Prints (opcional, até 5 imagens · máx. 6 MB cada)" />
                 <input
-                    ref="fileInput"
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/gif"
                     multiple
                     class="mt-1 block w-full text-sm text-slate-600"
                     @change="onFilesChange"
                 />
+                <p v-if="pasteHint" class="mt-1 text-xs text-amber-700">{{ pasteHint }}</p>
                 <InputError class="mt-1" :message="form.errors.attachments" />
                 <InputError
                     v-for="(msg, key) in form.errors"
@@ -85,7 +75,14 @@ const formatSize = (bytes) => {
                 />
 
                 <ul v-if="previews.length" class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    <li v-for="(p, i) in previews" :key="i" class="rounded-md border border-slate-200 p-2">
+                    <li v-for="(p, i) in previews" :key="i" class="relative rounded-md border border-slate-200 p-2">
+                        <button
+                            type="button"
+                            class="absolute right-1 top-1 rounded bg-white/90 px-1.5 text-xs text-slate-600 shadow hover:bg-white"
+                            @click="removeAt(i)"
+                        >
+                            ×
+                        </button>
                         <img :src="p.url" :alt="p.name" class="h-24 w-full rounded object-cover" />
                         <p class="mt-1 truncate text-xs text-slate-500">{{ p.name }}</p>
                         <p class="text-xs text-slate-400">{{ formatSize(p.size) }}</p>

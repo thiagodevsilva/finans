@@ -13,6 +13,7 @@ class SupportTicketAttachment extends Model
 
     protected $fillable = [
         'support_ticket_id',
+        'support_ticket_reply_id',
         'path',
         'original_name',
         'mime',
@@ -26,5 +27,10 @@ class SupportTicketAttachment extends Model
     public function ticket(): BelongsTo
     {
         return $this->belongsTo(SupportTicket::class, 'support_ticket_id');
+    }
+
+    public function reply(): BelongsTo
+    {
+        return $this->belongsTo(SupportTicketReply::class, 'support_ticket_reply_id');
     }
 }

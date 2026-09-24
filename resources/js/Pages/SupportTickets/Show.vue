@@ -3,6 +3,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
+import { useSupportAttachments } from '@/Composables/useSupportAttachments';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -12,14 +13,22 @@ const props = defineProps({
     canClose: Boolean,
 });
 
-const replyForm = useForm({ body: '' });
+const replyForm = useForm({ body: '', attachments: [] });
 const closeForm = useForm({ closed_reason: '' });
 const showCloseModal = ref(false);
 
+const { previews, pasteHint, onFilesChange, onPaste, clear, removeAt, formatSize } = useSupportAttachments(
+    (files) => { replyForm.attachments = files; },
+);
+
 const submitReply = () => {
     replyForm.post(route('support-tickets.replies.store', props.ticket.id), {
+        forceFormData: true,
         preserveScroll: true,
-        onSuccess: () => replyForm.reset(),
+        onSuccess: () => {
+            replyForm.reset();
+            clear();
+        },
     });
 };
 
@@ -127,6 +136,17 @@ const formatDate = (value) => {
                         <span>{{ formatDate(reply.created_at) }}</span>
                     </div>
                     <p class="mt-2 whitespace-pre-wrap text-sm text-slate-800">{{ reply.body }}</p>
+                    <div v-if="reply.attachments?.length" class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        <a
+                            v-for="att in reply.attachments"
+                            :key="att.id"
+                            :href="att.url"
+                            target="_blank"
+                            class="block overflow-hidden rounded-md border border-slate-200 bg-white"
+                        >
+                            <img :src="att.url" :alt="att.original_name" class="h-24 w-full object-cover" />
+                        </a>
+                    </div>
                 </div>
             </section>
 
@@ -141,8 +161,36 @@ const formatDate = (value) => {
                     rows="4"
                     required
                     class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+                    @paste="onPaste"
                 />
+                <p class="mt-1 text-xs text-slate-500">Cole um print com Ctrl+V (ou Cmd+V).</p>
                 <InputError class="mt-1" :message="replyForm.errors.body" />
+
+                <div class="mt-3">
+                    <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        multiple
+                        class="block w-full text-sm text-slate-600"
+                        @change="onFilesChange"
+                    />
+                    <p v-if="pasteHint" class="mt-1 text-xs text-amber-700">{{ pasteHint }}</p>
+                    <InputError class="mt-1" :message="replyForm.errors.attachments" />
+                    <ul v-if="previews.length" class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        <li v-for="(p, i) in previews" :key="i" class="relative rounded-md border border-slate-200 p-2">
+                            <button
+                                type="button"
+                                class="absolute right-1 top-1 rounded bg-white/90 px-1.5 text-xs text-slate-600 shadow"
+                                @click="removeAt(i)"
+                            >
+                                ×
+                            </button>
+                            <img :src="p.url" :alt="p.name" class="h-20 w-full rounded object-cover" />
+                            <p class="mt-1 truncate text-xs text-slate-500">{{ formatSize(p.size) }}</p>
+                        </li>
+                    </ul>
+                </div>
+
                 <div class="mt-3">
                     <PrimaryButton :disabled="replyForm.processing">Enviar</PrimaryButton>
                 </div>

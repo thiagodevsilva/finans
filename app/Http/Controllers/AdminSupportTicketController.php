@@ -10,6 +10,7 @@ use App\Models\SupportTicketAttachment;
 use App\Services\SupportSlaService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -72,12 +73,18 @@ class AdminSupportTicketController extends Controller
         $supportTicket->load([
             'user:id,name,email',
             'account:id,name',
-            'attachments',
+            'attachments' => fn ($q) => $q->whereNull('support_ticket_reply_id'),
             'replies.user:id,name',
+            'replies.attachments',
             'closedByUser:id,name',
         ]);
 
         $slaKey = $this->sla->statusLabel($supportTicket);
+        $mapAttachment = fn (SupportTicketAttachment $a) => [
+            'id' => $a->id,
+            'original_name' => $a->original_name,
+            'url' => route('support-tickets.attachments.show', $a),
+        ];
 
         return Inertia::render('Admin/SupportTickets/Show', [
             'ticket' => [
@@ -97,17 +104,14 @@ class AdminSupportTicketController extends Controller
                 'first_responded_at' => $supportTicket->first_responded_at?->toDateTimeString(),
                 'sla_status' => $slaKey,
                 'sla_label' => $this->slaLabel($slaKey),
-                'attachments' => $supportTicket->attachments->map(fn (SupportTicketAttachment $a) => [
-                    'id' => $a->id,
-                    'original_name' => $a->original_name,
-                    'url' => route('support-tickets.attachments.show', $a),
-                ]),
+                'attachments' => $supportTicket->attachments->map($mapAttachment),
                 'replies' => $supportTicket->replies->map(fn ($reply) => [
                     'id' => $reply->id,
                     'body' => $reply->body,
                     'is_staff' => $reply->is_staff,
                     'author_name' => $reply->user?->name,
                     'created_at' => $reply->created_at?->toDateTimeString(),
+                    'attachments' => $reply->attachments->map($mapAttachment),
                 ]),
             ],
             'statuses' => $this->statusOptions(),
@@ -139,19 +143,33 @@ class AdminSupportTicketController extends Controller
     {
         abort_if($supportTicket->isClosed(), 422, 'Chamado fechado.');
 
-        $supportTicket->replies()->create([
-            'user_id' => $request->user()->id,
-            'body' => $request->validated('body'),
-            'is_staff' => true,
-        ]);
+        DB::transaction(function () use ($request, $supportTicket) {
+            $reply = $supportTicket->replies()->create([
+                'user_id' => $request->user()->id,
+                'body' => $request->validated('body'),
+                'is_staff' => true,
+            ]);
 
-        $updates = ['status' => SupportTicket::STATUS_ANSWERED];
+            foreach ($request->file('attachments', []) as $file) {
+                $path = $file->store("support-tickets/{$supportTicket->id}", 'local');
 
-        if ($supportTicket->first_responded_at === null) {
-            $updates['first_responded_at'] = now();
-        }
+                $supportTicket->attachments()->create([
+                    'support_ticket_reply_id' => $reply->id,
+                    'path' => $path,
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime' => $file->getMimeType() ?: $file->getClientMimeType(),
+                    'size' => $file->getSize(),
+                ]);
+            }
 
-        $supportTicket->update($updates);
+            $updates = ['status' => SupportTicket::STATUS_ANSWERED];
+
+            if ($supportTicket->first_responded_at === null) {
+                $updates['first_responded_at'] = now();
+            }
+
+            $supportTicket->update($updates);
+        });
 
         return back()->with('success', 'Resposta enviada.');
     }
