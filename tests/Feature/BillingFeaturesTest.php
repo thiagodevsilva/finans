@@ -921,4 +921,227 @@ class BillingFeaturesTest extends TestCase
                 ->where('recurringSummary.paid_percent', 124)
             );
     }
+
+    public function test_unconfirm_fixed_bill_restores_planned_with_bill_estimate(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-bills.store'), [
+                'description' => 'Internet',
+                'category_id' => $category->id,
+                'estimated_amount' => 120,
+                'day_of_month' => 15,
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'start_date' => '2026-07-01',
+            ])
+            ->assertRedirect();
+
+        $bill = RecurringBill::withoutGlobalScopes()->first();
+        $augustPlanned = Transaction::withoutGlobalScopes()
+            ->where('recurring_bill_id', $bill->id)
+            ->where('status', Transaction::STATUS_PLANNED)
+            ->whereBetween('date', ['2026-08-01', '2026-08-31'])
+            ->first();
+
+        $this->assertNotNull($augustPlanned);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-transactions.confirm', $augustPlanned), [
+                'amount' => 125,
+                'date' => '2026-08-12',
+            ])
+            ->assertRedirect();
+
+        $augustPlanned->refresh();
+        $this->assertSame(Transaction::STATUS_CONFIRMED, $augustPlanned->status);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-transactions.unconfirm', $augustPlanned))
+            ->assertRedirect();
+
+        $augustPlanned->refresh();
+        $this->assertSame(Transaction::STATUS_PLANNED, $augustPlanned->status);
+        $this->assertEquals(120.0, (float) $augustPlanned->amount);
+        $this->assertSame('2026-08-15', $augustPlanned->date->toDateString());
+
+        $this->actingAs($owner)
+            ->get(route('recurring-bills.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('RecurringBills/Index')
+                ->where('paid', [])
+                ->has('upcoming', fn ($upcoming) => $upcoming->where('0.id', $augustPlanned->id)->etc())
+                ->where('periodSummary.current.paid_count', 0)
+                ->where('periodSummary.current.pending_count', 1)
+                ->where('periodSummary.current.pending_amount', 120)
+            );
+    }
+
+    public function test_unconfirm_variable_bill_deletes_payment(): void
+    {
+        $this->travelTo('2026-08-15 12:00:00');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-bills.store'), [
+                'description' => 'Combustível',
+                'kind' => RecurringBill::KIND_VARIABLE,
+                'category_id' => $category->id,
+                'estimated_amount' => 800,
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'start_date' => '2026-08-01',
+            ])
+            ->assertRedirect();
+
+        $bill = RecurringBill::withoutGlobalScopes()->first();
+
+        $this->actingAs($owner)
+            ->post(route('transactions.store'), [
+                'type' => Transaction::TYPE_EXPENSE,
+                'amount' => 150,
+                'description' => 'Posto',
+                'category_id' => $category->id,
+                'date' => '2026-08-10',
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'recurring_bill_id' => $bill->id,
+            ])
+            ->assertRedirect();
+
+        $payment = Transaction::withoutGlobalScopes()
+            ->where('recurring_bill_id', $bill->id)
+            ->where('status', Transaction::STATUS_CONFIRMED)
+            ->first();
+
+        $this->assertNotNull($payment);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-transactions.unconfirm', $payment))
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('transactions', ['id' => $payment->id]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 8, 'year' => 2026]))
+            ->assertInertia(fn ($page) => $page
+                ->where('recurringSummary.paid_amount', 0)
+                ->where('recurringSummary.pending_amount', 800)
+                ->where('recurringSummary.paid_percent', 0)
+            );
+    }
+
+    public function test_dependent_cannot_unconfirm_another_member_recurring_payment(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $dependent = User::factory()->dependent()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-bills.store'), [
+                'description' => 'Internet',
+                'category_id' => $category->id,
+                'estimated_amount' => 120,
+                'day_of_month' => 15,
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'start_date' => '2026-07-01',
+            ])
+            ->assertRedirect();
+
+        $bill = RecurringBill::withoutGlobalScopes()->first();
+        $planned = Transaction::withoutGlobalScopes()
+            ->where('recurring_bill_id', $bill->id)
+            ->where('status', Transaction::STATUS_PLANNED)
+            ->whereBetween('date', ['2026-08-01', '2026-08-31'])
+            ->first();
+
+        $this->actingAs($owner)
+            ->post(route('recurring-transactions.confirm', $planned), [
+                'amount' => 120,
+                'date' => $planned->date->toDateString(),
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($dependent)
+            ->post(route('recurring-transactions.unconfirm', $planned))
+            ->assertForbidden();
+
+        $planned->refresh();
+        $this->assertSame(Transaction::STATUS_CONFIRMED, $planned->status);
+    }
+
+    public function test_unconfirm_credit_card_bill_restores_invoice_link_for_planned(): void
+    {
+        $this->travelTo('2026-08-05 12:00:00');
+
+        $account = Account::factory()->create();
+        $owner = User::factory()->owner()->create(['account_id' => $account->id]);
+        $category = Category::factory()->create(['account_id' => $account->id]);
+        $card = PaymentCard::withoutGlobalScopes()->create([
+            'account_id' => $account->id,
+            'user_id' => $owner->id,
+            'name' => 'Nubank',
+            'brand' => 'mastercard',
+            'type' => PaymentCard::TYPE_CREDIT,
+            'last_four' => '1234',
+            'color' => '#820ad1',
+            'closing_day' => 10,
+            'due_day' => 17,
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-bills.store'), [
+                'description' => 'Streaming',
+                'category_id' => $category->id,
+                'estimated_amount' => 55,
+                'day_of_month' => 8,
+                'payment_method' => Transaction::PAYMENT_CARD,
+                'payment_card_id' => $card->id,
+                'start_date' => '2026-07-01',
+            ])
+            ->assertRedirect();
+
+        $bill = RecurringBill::withoutGlobalScopes()->first();
+        $planned = Transaction::withoutGlobalScopes()
+            ->where('recurring_bill_id', $bill->id)
+            ->where('status', Transaction::STATUS_PLANNED)
+            ->whereBetween('date', ['2026-08-01', '2026-08-31'])
+            ->first();
+
+        $this->assertNotNull($planned);
+        $this->assertNotNull($planned->credit_card_invoice_id);
+        $originalInvoiceId = $planned->credit_card_invoice_id;
+
+        $this->actingAs($owner)
+            ->post(route('recurring-transactions.confirm', $planned), [
+                'amount' => 59.90,
+                'date' => '2026-08-08',
+            ])
+            ->assertRedirect();
+
+        $planned->refresh();
+        $this->assertSame(Transaction::STATUS_CONFIRMED, $planned->status);
+        $this->assertNotNull($planned->credit_card_invoice_id);
+
+        $this->actingAs($owner)
+            ->post(route('recurring-transactions.unconfirm', $planned))
+            ->assertRedirect();
+
+        $planned->refresh();
+        $this->assertSame(Transaction::STATUS_PLANNED, $planned->status);
+        $this->assertEquals(55.0, (float) $planned->amount);
+        $this->assertSame('2026-08-08', $planned->date->toDateString());
+        $this->assertSame(Transaction::PAYMENT_CARD, $planned->payment_method);
+        $this->assertSame($card->id, $planned->payment_card_id);
+        $this->assertSame($originalInvoiceId, $planned->credit_card_invoice_id);
+    }
 }

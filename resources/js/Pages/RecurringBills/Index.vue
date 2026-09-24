@@ -309,6 +309,14 @@ const skip = (item) => {
     if (!confirm('Pular este lançamento no mês?')) return;
     router.post(route('recurring-transactions.skip', item.id));
 };
+
+const unconfirm = (item) => {
+    const message = item.kind === 'variable'
+        ? 'Remover este pagamento?'
+        : 'Desfazer este pagamento? A conta voltará para a pagar.';
+    if (!confirm(message)) return;
+    router.post(route('recurring-transactions.unconfirm', item.id));
+};
 </script>
 
 <template>
@@ -588,9 +596,19 @@ const skip = (item) => {
                                                     </span>
                                                 </p>
                                             </div>
-                                            <span class="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                                                Paga
-                                            </span>
+                                            <div class="flex shrink-0 items-center gap-2">
+                                                <button
+                                                    v-if="item.can_edit"
+                                                    type="button"
+                                                    class="px-1 py-1.5 text-xs font-medium text-horizon-600 hover:underline sm:text-sm"
+                                                    @click="unconfirm(item)"
+                                                >
+                                                    Desfazer
+                                                </button>
+                                                <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                                                    Paga
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

@@ -89,6 +89,7 @@ class RecurringBillController extends Controller
             'status' => $tx->status,
             'category' => $tx->category,
             'recurring_bill_id' => $tx->recurring_bill_id,
+            'kind' => $tx->recurringBill?->kind ?? RecurringBill::KIND_FIXED,
             'can_edit' => $user->isOwner() || $tx->user_id === $user->id,
         ];
 
@@ -298,5 +299,18 @@ class RecurringBillController extends Controller
         $this->service->skip($transaction);
 
         return back()->with('success', 'Lançamento pulado neste mês.');
+    }
+
+    public function unconfirm(Transaction $transaction): RedirectResponse
+    {
+        $this->authorize('update', $transaction);
+
+        if (! $transaction->recurring_bill_id || $transaction->status !== Transaction::STATUS_CONFIRMED) {
+            return back()->with('error', 'Lançamento inválido para desfazer pagamento.');
+        }
+
+        $this->service->unconfirm($transaction);
+
+        return back()->with('success', 'Pagamento desfeito.');
     }
 }

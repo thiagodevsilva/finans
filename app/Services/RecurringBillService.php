@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\DB;
 class RecurringBillService
 {
     public function __construct(
-        private readonly CreditCardInvoiceService $invoiceService
+        private readonly CreditCardInvoiceService $invoiceService,
+        private readonly BalanceService $balances
     ) {}
 
     public function create(User $user, array $data): RecurringBill
@@ -254,6 +255,58 @@ class RecurringBillService
     public function skip(Transaction $transaction): void
     {
         $transaction->update(['status' => Transaction::STATUS_SKIPPED]);
+    }
+
+    /**
+     * Desfaz pagamento confirmado de conta fixa/variável.
+     * Fixed: volta a planned com dados do cadastro. Variable: remove o lançamento.
+     */
+    public function unconfirm(Transaction $transaction): ?Transaction
+    {
+        if (! $transaction->recurring_bill_id) {
+            throw new \InvalidArgumentException('Transação não é de conta fixa.');
+        }
+
+        if ($transaction->status !== Transaction::STATUS_CONFIRMED) {
+            throw new \InvalidArgumentException('Lançamento inválido para desfazer pagamento.');
+        }
+
+        $bill = RecurringBill::query()->findOrFail($transaction->recurring_bill_id);
+
+        $this->balances->recordRetroactiveCashDeletion($transaction);
+
+        if ($bill->isVariable()) {
+            $transaction->delete();
+
+            return null;
+        }
+
+        $dueDate = $this->dueDateForMonth($bill, $transaction->date->copy()->startOfMonth());
+
+        $invoiceId = null;
+        if ($bill->payment_method === Transaction::PAYMENT_CARD && $bill->payment_card_id) {
+            $card = PaymentCard::query()->find($bill->payment_card_id);
+            if ($card) {
+                $invoiceId = $this->invoiceService->resolveForPurchase($card, $dueDate)?->id;
+            }
+        }
+
+        $transaction->update([
+            'status' => Transaction::STATUS_PLANNED,
+            'amount' => $bill->estimated_amount,
+            'description' => $bill->description,
+            'category_id' => $bill->category_id,
+            'date' => $dueDate->toDateString(),
+            'payment_method' => $bill->payment_method,
+            'payment_card_id' => $bill->payment_card_id,
+            'bank_account_id' => null,
+            'credit_card_invoice_id' => $invoiceId,
+            'user_id' => $bill->user_id,
+            'is_shared' => (bool) $bill->is_shared,
+            'company_id' => $bill->company_id,
+        ]);
+
+        return $transaction->fresh();
     }
 
     /**

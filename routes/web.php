@@ -135,6 +135,8 @@ Route::middleware(['auth', 'last.seen'])->group(function () {
             ->name('recurring-transactions.confirm');
         Route::post('/recurring-transactions/{transaction}/skip', [RecurringBillController::class, 'skip'])
             ->name('recurring-transactions.skip');
+        Route::post('/recurring-transactions/{transaction}/unconfirm', [RecurringBillController::class, 'unconfirm'])
+            ->name('recurring-transactions.unconfirm');
 
         Route::get('/companies', [CompanyController::class, 'index'])->name('companies.index');
         Route::post('/companies', [CompanyController::class, 'store'])->name('companies.store');
