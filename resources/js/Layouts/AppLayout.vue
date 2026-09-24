@@ -32,7 +32,7 @@ const links = [
     { name: 'Cartões', route: 'payment-cards.index', match: 'payment-cards.*', tour: 'nav-payment-cards' },
     { name: 'CNPJs', route: 'companies.index', match: 'companies.*' },
     { name: 'Categorias', route: 'categories.index', match: 'categories.*' },
-    { name: 'Dependentes', route: 'members.index', match: 'members.*' },
+    { name: 'Membros', route: 'members.index', match: 'members.*' },
     { name: 'Relatórios', route: 'reports.index', match: 'reports.*' },
     { name: 'Suporte', route: 'support-tickets.index', match: 'support-tickets.*' },
 ];
@@ -153,7 +153,7 @@ onUnmounted(() => {
 
             <div class="mx-6 rounded-[20px] bg-lightPrimary p-4">
                 <p class="text-[0.9625rem] font-bold text-navy-700">{{ user?.name }}</p>
-                <p class="text-[0.825rem] text-horizon-500">{{ user?.is_owner ? 'Dono da conta' : 'Dependente' }}</p>
+                <p class="text-[0.825rem] text-horizon-500">{{ user?.is_owner ? 'Dono da conta' : 'Membro' }}</p>
                 <div class="mt-3 flex flex-col gap-2">
                     <button
                         type="button"

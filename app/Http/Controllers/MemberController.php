@@ -37,7 +37,7 @@ class MemberController extends Controller
             'role' => User::ROLE_DEPENDENT,
         ]);
 
-        return back()->with('success', 'Dependente adicionado com sucesso.');
+        return back()->with('success', 'Membro adicionado com sucesso.');
     }
 
     public function destroy(User $member): RedirectResponse
@@ -46,6 +46,6 @@ class MemberController extends Controller
 
         $member->delete();
 
-        return back()->with('success', 'Dependente removido com sucesso.');
+        return back()->with('success', 'Membro removido com sucesso.');
     }
 }
