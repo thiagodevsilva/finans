@@ -20,5 +20,23 @@ jobs:
           script: |
             cd /opt/finans
             git pull origin main
-            docker compose up -d --build
+            docker compose build
+            docker compose up -d mysql
+            # Sem --force-recreate o app pode continuar no container antigo e o migrate do entrypoint não roda.
+            docker compose up -d --force-recreate --no-deps app
+            echo "Aguardando o container aplicar o boot..."
+            ready=0
+            for i in $(seq 1 90); do
+              if docker compose exec -T app test -f /tmp/levita-ready; then
+                ready=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$ready" != "1" ]; then
+              echo "Container nao ficou pronto. Ultimos logs:"
+              docker compose logs --tail=120 app
+              exit 1
+            fi
+            docker compose exec -T app php artisan migrate --force
             docker image prune -f

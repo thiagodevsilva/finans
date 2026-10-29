@@ -42,6 +42,8 @@ const props = defineProps({
             pending_count: 0,
             total_count: 0,
             paid_percent: 0,
+            skipped_count: 0,
+            skipped_amount: 0,
         }),
     },
     filters: Object,
@@ -101,7 +103,9 @@ const years = computed(() => {
 });
 
 const hasRecurring = computed(() =>
-    showingDemo.value || recurringSummary.value.total_count > 0,
+    showingDemo.value
+    || recurringSummary.value.total_count > 0
+    || recurringSummary.value.skipped_count > 0,
 );
 
 const balanceDisplay = computed(() => {
@@ -455,6 +459,10 @@ onMounted(() => {
                             ({{ formatBRL(recurringSummary.paid_amount) }} / {{ formatBRL(recurringSummary.total_amount) }})
                         </span>
                     </p>
+                    <p v-if="recurringSummary.skipped_count" class="mt-0.5 text-xs text-horizon-500">
+                        {{ recurringSummary.skipped_count }} pulada{{ recurringSummary.skipped_count === 1 ? '' : 's' }}
+                        fora desta porcentagem
+                    </p>
                 </div>
                 <Link
                     :href="route('recurring-bills.index')"
@@ -466,7 +474,7 @@ onMounted(() => {
             <div class="progress-track mt-2">
                 <div
                     class="progress-fill"
-                    :style="{ width: `${recurringSummary.paid_percent}%` }"
+                    :style="{ width: `${Math.min(100, recurringSummary.paid_percent || 0)}%` }"
                 />
             </div>
         </div>

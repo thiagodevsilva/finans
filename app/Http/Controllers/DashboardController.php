@@ -184,6 +184,8 @@ class DashboardController extends Controller
                 'pending_count' => $recurringSummary['pending_count'],
                 'total_count' => $recurringSummary['total_count'],
                 'paid_percent' => $recurringSummary['paid_percent'],
+                'skipped_count' => $recurringSummary['skipped_count'],
+                'skipped_amount' => $recurringSummary['skipped_amount'],
             ],
             'filters' => [
                 'month' => $month,

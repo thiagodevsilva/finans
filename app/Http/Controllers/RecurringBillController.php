@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ConfirmRecurringTransactionRequest;
 use App\Http\Requests\RecurringBillRequest;
+use App\Http\Requests\RecurringBillScopeRequest;
 use App\Models\BankAccount;
 use App\Models\Category;
 use App\Models\PaymentCard;
@@ -37,15 +38,32 @@ class RecurringBillController extends Controller
         $monthSummary = $this->service->summarizeMonth(now(), $view);
         $paidByBill = $monthSummary['paid_by_bill'];
 
+        $horizonStart = now()->startOfMonth()->toDateString();
+        $horizonEnd = now()->addMonthsNoOverflow(2)->endOfMonth()->toDateString();
+        $currentMonth = now()->format('Y-m');
+
+        $skippedRows = Transaction::query()
+            ->forViewContext($view)
+            ->with(['category:id,name,color', 'recurringBill:id,description,kind'])
+            ->whereNotNull('recurring_bill_id')
+            ->where('status', Transaction::STATUS_SKIPPED)
+            ->whereBetween('date', [$horizonStart, $horizonEnd])
+            ->orderBy('date')
+            ->get();
+
+        $skipByBill = $skippedRows
+            ->filter(fn (Transaction $tx) => $tx->date->format('Y-m') === $currentMonth)
+            ->keyBy('recurring_bill_id');
+
         $bills = RecurringBill::query()
             ->forViewContext($view)
             ->with(['category:id,name,color', 'user:id,name', 'paymentCard:id,name,color', 'bankAccount:id,name,color'])
-            ->where('active', true)
+            ->orderByDesc('active')
             ->orderByRaw('day_of_month is null')
             ->orderBy('day_of_month')
             ->orderBy('description')
             ->get()
-            ->map(function (RecurringBill $bill) use ($user, $paidByBill) {
+            ->map(function (RecurringBill $bill) use ($user, $paidByBill, $skipByBill) {
                 $monthPaid = (float) ($paidByBill[$bill->id] ?? 0);
                 $estimate = (float) $bill->estimated_amount;
                 $monthPercent = $estimate > 0
@@ -75,11 +93,14 @@ class RecurringBillController extends Controller
                     'can_edit' => $user->isOwner() || $bill->user_id === $user->id,
                     'month_paid' => $monthPaid,
                     'month_percent' => $monthPercent,
+                    'month_remaining' => $bill->isVariable()
+                        ? max(0, round($estimate - $monthPaid, 2))
+                        : 0,
+                    'month_skipped' => $skipByBill->has($bill->id),
+                    'month_skip_id' => $skipByBill->get($bill->id)?->id,
+                    'counts_this_month' => $bill->countsInMonth(now()),
                 ];
             });
-
-        $horizonStart = now()->startOfMonth()->toDateString();
-        $horizonEnd = now()->addMonthsNoOverflow(2)->endOfMonth()->toDateString();
 
         $mapScheduleItem = fn (Transaction $tx) => [
             'id' => $tx->id,
@@ -121,6 +142,8 @@ class RecurringBillController extends Controller
             ->get()
             ->map($mapScheduleItem);
 
+        $skipped = $skippedRows->map($mapScheduleItem);
+
         $monthKey = fn (string $date) => substr($date, 0, 7);
 
         $sumByMonth = function ($items) use ($monthKey) {
@@ -148,7 +171,6 @@ class RecurringBillController extends Controller
         $upcomingCounts = $countByMonth($upcoming);
         $paidCounts = $countByMonth($paid);
 
-        $currentMonth = now()->format('Y-m');
         $nextMonth = now()->copy()->addMonthNoOverflow()->format('Y-m');
 
         $periodSummary = [
@@ -160,6 +182,8 @@ class RecurringBillController extends Controller
                 'paid_amount' => $monthSummary['paid_amount'],
                 'total_amount' => $monthSummary['total_amount'],
                 'paid_percent' => $monthSummary['paid_percent'],
+                'skipped_count' => $monthSummary['skipped_count'],
+                'skipped_amount' => $monthSummary['skipped_amount'],
             ],
             'next' => [
                 'month' => $nextMonth,
@@ -174,6 +198,7 @@ class RecurringBillController extends Controller
             'bills' => $bills,
             'upcoming' => $upcoming,
             'paid' => $paid,
+            'skipped' => $skipped,
             'periodSummary' => $periodSummary,
             'categories' => Category::query()->orderBy('name')->get(['id', 'name', 'color']),
             'paymentCards' => PaymentCard::query()
@@ -259,7 +284,10 @@ class RecurringBillController extends Controller
             ->exists();
 
         if ($hasHistory) {
-            $recurringBill->update(['active' => false]);
+            $recurringBill->update([
+                'active' => false,
+                'suspended_from' => now()->startOfMonth()->toDateString(),
+            ]);
 
             return back()->with('success', 'Conta fixa desativada (já havia pagamentos no histórico).');
         }
@@ -298,7 +326,65 @@ class RecurringBillController extends Controller
 
         $this->service->skip($transaction);
 
-        return back()->with('success', 'Lançamento pulado neste mês.');
+        return back()->with('success', 'Lançamento pulado neste mês. Ele não entra na porcentagem.');
+    }
+
+    public function unskip(Transaction $transaction): RedirectResponse
+    {
+        $this->authorize('update', $transaction);
+
+        if (! $transaction->recurring_bill_id || $transaction->status !== Transaction::STATUS_SKIPPED) {
+            return back()->with('error', 'Lançamento inválido para desfazer o pulo.');
+        }
+
+        $this->service->unskip($transaction);
+
+        return back()->with('success', 'Pulo desfeito. A conta voltou para este mês.');
+    }
+
+    public function skipMonth(RecurringBill $recurringBill): RedirectResponse
+    {
+        $this->authorize('update', $recurringBill);
+
+        $this->service->skipCurrentMonth($recurringBill);
+
+        return back()->with('success', 'Mês pulado. Esta conta não entra na porcentagem.');
+    }
+
+    public function deactivate(RecurringBillScopeRequest $request, RecurringBill $recurringBill): RedirectResponse
+    {
+        $this->authorize('update', $recurringBill);
+
+        if (! $recurringBill->active) {
+            return back()->with('error', 'Esta conta já está inativa.');
+        }
+
+        $scope = $request->validated('scope');
+        $this->service->deactivate($recurringBill, $scope);
+
+        $message = $scope === 'current'
+            ? 'Conta inativada. O mês atual foi removido.'
+            : 'Conta inativada. O mês atual foi mantido; os próximos não serão gerados.';
+
+        return back()->with('success', $message);
+    }
+
+    public function activate(RecurringBillScopeRequest $request, RecurringBill $recurringBill): RedirectResponse
+    {
+        $this->authorize('update', $recurringBill);
+
+        if ($recurringBill->active) {
+            return back()->with('error', 'Esta conta já está ativa.');
+        }
+
+        $scope = $request->validated('scope');
+        $this->service->activate($recurringBill, $scope);
+
+        $message = $scope === 'current'
+            ? 'Conta ativada. O mês atual foi gerado.'
+            : 'Conta ativada. O mês atual ficou de fora; os próximos serão gerados.';
+
+        return back()->with('success', $message);
     }
 
     public function unconfirm(Transaction $transaction): RedirectResponse

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CreditCardInvoice;
 use App\Models\PaymentCard;
 use App\Models\RecurringBill;
 use App\Models\Transaction;
@@ -75,6 +76,7 @@ class RecurringBillService
 
             if ($dueDate->lt(Carbon::parse($bill->start_date)->startOfDay())) {
                 $cursor->addMonthNoOverflow();
+
                 continue;
             }
 
@@ -109,6 +111,7 @@ class RecurringBillService
 
     /**
      * Progresso do mês: fixas (confirmed + planned) + variáveis (estimativa / pagos).
+     * Lançamento pulado não entra no total nem na porcentagem.
      *
      * @return array{
      *     paid_amount: float,
@@ -118,6 +121,8 @@ class RecurringBillService
      *     pending_count: int,
      *     total_count: int,
      *     paid_percent: int,
+     *     skipped_count: int,
+     *     skipped_amount: float,
      *     paid_by_bill: array<string, float>
      * }
      */
@@ -156,15 +161,20 @@ class RecurringBillService
             ->map(fn ($rows) => round((float) $rows->sum('amount'), 2))
             ->all();
 
+        $skipped = $txQuery()
+            ->whereNotNull('recurring_bill_id')
+            ->where('status', Transaction::STATUS_SKIPPED)
+            ->whereBetween('date', $range)
+            ->get(['id', 'amount', 'recurring_bill_id']);
+
+        $skippedBillIds = $skipped->pluck('recurring_bill_id')->unique()->all();
+        $skippedCount = count($skippedBillIds);
+        $skippedAmount = round((float) $skipped->sum('amount'), 2);
+
         $variableBills = RecurringBill::query()
             ->when($view, fn ($q) => $q->forViewContext($view))
             ->where('kind', RecurringBill::KIND_VARIABLE)
-            ->where('active', true)
-            ->whereDate('start_date', '<=', $end->toDateString())
-            ->where(function ($q) use ($start) {
-                $q->whereNull('end_date')
-                    ->orWhereDate('end_date', '>=', $start->toDateString());
-            })
+            ->countsInMonth($start)
             ->get(['id', 'estimated_amount']);
 
         $variableEstimateTotal = 0.0;
@@ -173,6 +183,10 @@ class RecurringBillService
         $variableBillIds = [];
 
         foreach ($variableBills as $bill) {
+            if (in_array($bill->id, $skippedBillIds, true)) {
+                continue;
+            }
+
             $variableBillIds[] = $bill->id;
             $estimate = (float) $bill->estimated_amount;
             $paid = (float) ($paidByBill[$bill->id] ?? 0);
@@ -197,7 +211,7 @@ class RecurringBillService
         $totalCount = $paidCount + $pendingCount;
         $paidPercent = $totalAmount > 0
             ? (int) round(($paidAmount / $totalAmount) * 100)
-            : 0;
+            : ($skippedCount > 0 ? 100 : 0);
 
         return [
             'paid_amount' => $paidAmount,
@@ -207,6 +221,8 @@ class RecurringBillService
             'pending_count' => $pendingCount,
             'total_count' => $totalCount,
             'paid_percent' => $paidPercent,
+            'skipped_count' => $skippedCount,
+            'skipped_amount' => $skippedAmount,
             'paid_by_bill' => $paidByBill,
         ];
     }
@@ -254,7 +270,115 @@ class RecurringBillService
 
     public function skip(Transaction $transaction): void
     {
-        $transaction->update(['status' => Transaction::STATUS_SKIPPED]);
+        $invoiceId = $transaction->credit_card_invoice_id;
+
+        $transaction->update([
+            'status' => Transaction::STATUS_SKIPPED,
+            'credit_card_invoice_id' => null,
+        ]);
+
+        $this->refreshInvoice($invoiceId);
+    }
+
+    /**
+     * Pula o mês inteiro da conta. Fixa: marca o planned. Variável: grava um marcador
+     * para a estimativa sair da porcentagem, mesmo sem gasto lançado.
+     */
+    public function skipCurrentMonth(RecurringBill $bill, ?Carbon $month = null): void
+    {
+        $month ??= now();
+
+        if ($this->findMonthTransaction($bill, $month, Transaction::STATUS_SKIPPED)) {
+            return;
+        }
+
+        if (! $bill->isVariable()) {
+            $planned = $this->findMonthTransaction($bill, $month, Transaction::STATUS_PLANNED);
+            if ($planned) {
+                $this->skip($planned);
+
+                return;
+            }
+
+            if ($this->findMonthTransaction($bill, $month, Transaction::STATUS_CONFIRMED)) {
+                return;
+            }
+        }
+
+        $date = $bill->isVariable() || ! $bill->day_of_month
+            ? $month->copy()->startOfMonth()
+            : $this->dueDateForMonth($bill, $month->copy()->startOfMonth());
+
+        $this->createSkippedMarker($bill, $date);
+    }
+
+    public function unskip(Transaction $transaction): ?Transaction
+    {
+        if (! $transaction->recurring_bill_id || $transaction->status !== Transaction::STATUS_SKIPPED) {
+            throw new \InvalidArgumentException('Lançamento inválido para desfazer o pulo.');
+        }
+
+        $bill = RecurringBill::query()->findOrFail($transaction->recurring_bill_id);
+
+        if ($bill->isVariable()) {
+            $transaction->delete();
+
+            return null;
+        }
+
+        return $this->restorePlanned($transaction, $bill);
+    }
+
+    /**
+     * Inativa sem apagar o cadastro.
+     * current: tira o mês atual e os seguintes. future: mantém o mês atual.
+     */
+    public function deactivate(RecurringBill $bill, string $scope): void
+    {
+        $startThisMonth = now()->copy()->startOfMonth();
+        $startNextMonth = now()->copy()->startOfMonth()->addMonthNoOverflow();
+
+        $bill->update([
+            'active' => false,
+            'suspended_from' => ($scope === 'current' ? $startThisMonth : $startNextMonth)->toDateString(),
+        ]);
+
+        $planned = Transaction::query()
+            ->where('recurring_bill_id', $bill->id)
+            ->where('status', Transaction::STATUS_PLANNED);
+
+        if ($scope === 'current') {
+            $planned->whereDate('date', '>=', $startThisMonth->toDateString())->delete();
+
+            if ($bill->isVariable()) {
+                $this->skipCurrentMonth($bill->fresh());
+            }
+
+            return;
+        }
+
+        $planned->whereDate('date', '>=', $startNextMonth->toDateString())->delete();
+    }
+
+    /**
+     * Reativa. current: gera o mês atual. future: só os próximos (o mês atual fica pulado).
+     */
+    public function activate(RecurringBill $bill, string $scope): void
+    {
+        $bill->update([
+            'active' => true,
+            'suspended_from' => null,
+        ]);
+
+        $bill = $bill->fresh();
+
+        if ($scope === 'future') {
+            $this->omitCurrentMonthIfMissing($bill);
+        } else {
+            $this->restoreCurrentMonth($bill);
+        }
+
+        $this->materializeAhead($bill->fresh(), 3);
     }
 
     /**
@@ -281,32 +405,7 @@ class RecurringBillService
             return null;
         }
 
-        $dueDate = $this->dueDateForMonth($bill, $transaction->date->copy()->startOfMonth());
-
-        $invoiceId = null;
-        if ($bill->payment_method === Transaction::PAYMENT_CARD && $bill->payment_card_id) {
-            $card = PaymentCard::query()->find($bill->payment_card_id);
-            if ($card) {
-                $invoiceId = $this->invoiceService->resolveForPurchase($card, $dueDate)?->id;
-            }
-        }
-
-        $transaction->update([
-            'status' => Transaction::STATUS_PLANNED,
-            'amount' => $bill->estimated_amount,
-            'description' => $bill->description,
-            'category_id' => $bill->category_id,
-            'date' => $dueDate->toDateString(),
-            'payment_method' => $bill->payment_method,
-            'payment_card_id' => $bill->payment_card_id,
-            'bank_account_id' => null,
-            'credit_card_invoice_id' => $invoiceId,
-            'user_id' => $bill->user_id,
-            'is_shared' => (bool) $bill->is_shared,
-            'company_id' => $bill->company_id,
-        ]);
-
-        return $transaction->fresh();
+        return $this->restorePlanned($transaction, $bill);
     }
 
     /**
@@ -492,6 +591,129 @@ class RecurringBillService
         });
 
         return $count;
+    }
+
+    private function omitCurrentMonthIfMissing(RecurringBill $bill): void
+    {
+        $month = now();
+
+        if ($this->findMonthTransaction($bill, $month, Transaction::STATUS_CONFIRMED)) {
+            return;
+        }
+
+        if (! $bill->isVariable() && $this->findMonthTransaction($bill, $month, Transaction::STATUS_PLANNED)) {
+            return;
+        }
+
+        $this->skipCurrentMonth($bill);
+    }
+
+    private function restoreCurrentMonth(RecurringBill $bill): void
+    {
+        $month = now();
+
+        if ($bill->isVariable()) {
+            $this->deleteSkippedInMonth($bill, $month);
+
+            return;
+        }
+
+        if ($this->findMonthTransaction($bill, $month, Transaction::STATUS_CONFIRMED)) {
+            $this->deleteSkippedInMonth($bill, $month);
+
+            return;
+        }
+
+        $skipped = $this->findMonthTransaction($bill, $month, Transaction::STATUS_SKIPPED);
+        if ($skipped) {
+            $this->unskip($skipped);
+        }
+    }
+
+    private function restorePlanned(Transaction $transaction, RecurringBill $bill): Transaction
+    {
+        $dueDate = $this->dueDateForMonth($bill, $transaction->date->copy()->startOfMonth());
+
+        $invoiceId = null;
+        if ($bill->payment_method === Transaction::PAYMENT_CARD && $bill->payment_card_id) {
+            $card = PaymentCard::query()->find($bill->payment_card_id);
+            if ($card) {
+                $invoiceId = $this->invoiceService->resolveForPurchase($card, $dueDate)?->id;
+            }
+        }
+
+        $transaction->update([
+            'status' => Transaction::STATUS_PLANNED,
+            'amount' => $bill->estimated_amount,
+            'description' => $bill->description,
+            'category_id' => $bill->category_id,
+            'date' => $dueDate->toDateString(),
+            'payment_method' => $bill->payment_method,
+            'payment_card_id' => $bill->payment_card_id,
+            'bank_account_id' => null,
+            'credit_card_invoice_id' => $invoiceId,
+            'user_id' => $bill->user_id,
+            'is_shared' => (bool) $bill->is_shared,
+            'company_id' => $bill->company_id,
+        ]);
+
+        $this->refreshInvoice($invoiceId);
+
+        return $transaction->fresh();
+    }
+
+    private function findMonthTransaction(RecurringBill $bill, Carbon $month, string $status): ?Transaction
+    {
+        return Transaction::query()
+            ->where('recurring_bill_id', $bill->id)
+            ->where('status', $status)
+            ->whereYear('date', $month->year)
+            ->whereMonth('date', $month->month)
+            ->first();
+    }
+
+    private function deleteSkippedInMonth(RecurringBill $bill, Carbon $month): void
+    {
+        Transaction::query()
+            ->where('recurring_bill_id', $bill->id)
+            ->where('status', Transaction::STATUS_SKIPPED)
+            ->whereYear('date', $month->year)
+            ->whereMonth('date', $month->month)
+            ->delete();
+    }
+
+    private function createSkippedMarker(RecurringBill $bill, Carbon $date): Transaction
+    {
+        return Transaction::create([
+            'account_id' => $bill->account_id,
+            'user_id' => $bill->user_id,
+            'is_shared' => (bool) $bill->is_shared,
+            'company_id' => $bill->company_id,
+            'created_by' => $bill->created_by,
+            'category_id' => $bill->category_id,
+            'type' => Transaction::TYPE_EXPENSE,
+            'amount' => $bill->estimated_amount,
+            'description' => $bill->description,
+            'date' => $date->toDateString(),
+            'payment_method' => $bill->payment_method,
+            'payment_card_id' => $bill->payment_card_id,
+            'bank_account_id' => null,
+            'credit_card_invoice_id' => null,
+            'recurring_bill_id' => $bill->id,
+            'status' => Transaction::STATUS_SKIPPED,
+        ]);
+    }
+
+    private function refreshInvoice(?string $invoiceId): void
+    {
+        if (! $invoiceId) {
+            return;
+        }
+
+        $invoice = CreditCardInvoice::query()->find($invoiceId);
+        if ($invoice) {
+            $this->invoiceService->refreshStatus($invoice);
+        }
     }
 
     private function createPlannedTransaction(RecurringBill $bill, Carbon $dueDate): Transaction

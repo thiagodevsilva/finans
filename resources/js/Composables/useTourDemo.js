@@ -41,6 +41,8 @@ export const demoDashboardData = {
         pending_count: 1,
         total_count: 2,
         paid_percent: 92,
+        skipped_count: 0,
+        skipped_amount: 0,
     },
     recentTransactions: [
         {

@@ -131,10 +131,18 @@ Route::middleware(['auth', 'last.seen'])->group(function () {
         Route::post('/recurring-bills', [RecurringBillController::class, 'store'])->name('recurring-bills.store');
         Route::put('/recurring-bills/{recurring_bill}', [RecurringBillController::class, 'update'])->name('recurring-bills.update');
         Route::delete('/recurring-bills/{recurring_bill}', [RecurringBillController::class, 'destroy'])->name('recurring-bills.destroy');
+        Route::post('/recurring-bills/{recurring_bill}/deactivate', [RecurringBillController::class, 'deactivate'])
+            ->name('recurring-bills.deactivate');
+        Route::post('/recurring-bills/{recurring_bill}/activate', [RecurringBillController::class, 'activate'])
+            ->name('recurring-bills.activate');
+        Route::post('/recurring-bills/{recurring_bill}/skip-month', [RecurringBillController::class, 'skipMonth'])
+            ->name('recurring-bills.skip-month');
         Route::post('/recurring-transactions/{transaction}/confirm', [RecurringBillController::class, 'confirm'])
             ->name('recurring-transactions.confirm');
         Route::post('/recurring-transactions/{transaction}/skip', [RecurringBillController::class, 'skip'])
             ->name('recurring-transactions.skip');
+        Route::post('/recurring-transactions/{transaction}/unskip', [RecurringBillController::class, 'unskip'])
+            ->name('recurring-transactions.unskip');
         Route::post('/recurring-transactions/{transaction}/unconfirm', [RecurringBillController::class, 'unconfirm'])
             ->name('recurring-transactions.unconfirm');
 

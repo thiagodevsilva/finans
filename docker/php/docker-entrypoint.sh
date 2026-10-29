@@ -57,4 +57,7 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
+# O deploy espera este arquivo antes de rodar migrate de novo no log do Actions.
+touch /tmp/levita-ready
+
 exec "$@"
