@@ -137,6 +137,8 @@ Route::middleware(['auth', 'last.seen'])->group(function () {
             ->name('recurring-bills.activate');
         Route::post('/recurring-bills/{recurring_bill}/skip-month', [RecurringBillController::class, 'skipMonth'])
             ->name('recurring-bills.skip-month');
+        Route::post('/recurring-bills/{recurring_bill}/pay', [RecurringBillController::class, 'pay'])
+            ->name('recurring-bills.pay');
         Route::post('/recurring-transactions/{transaction}/confirm', [RecurringBillController::class, 'confirm'])
             ->name('recurring-transactions.confirm');
         Route::post('/recurring-transactions/{transaction}/skip', [RecurringBillController::class, 'skip'])

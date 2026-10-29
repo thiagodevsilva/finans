@@ -842,10 +842,10 @@ class BillingFeaturesTest extends TestCase
                 ->where('summary.expense_debit', 0)
                 ->where('summary.expense_credit', 0)
                 ->where('summary.expense_spend', 0)
-                ->where('recurringSummary.paid_amount', 450)
-                ->where('recurringSummary.total_amount', 800)
-                ->where('recurringSummary.pending_amount', 350)
-                ->where('recurringSummary.paid_percent', 56)
+                ->where('recurringSummary.paid_amount', 0)
+                ->where('recurringSummary.total_amount', 0)
+                ->where('recurringSummary.pending_amount', 0)
+                ->where('recurringSummary.paid_percent', 0)
             );
 
         $this->actingAs($owner)
@@ -857,8 +857,8 @@ class BillingFeaturesTest extends TestCase
                 ->where('bills.0.kind', RecurringBill::KIND_VARIABLE)
                 ->where('bills.0.month_paid', 450)
                 ->where('bills.0.month_percent', 56)
-                ->where('periodSummary.current.paid_amount', 450)
-                ->where('periodSummary.current.total_amount', 800)
+                ->where('periodSummary.current.paid_amount', 0)
+                ->where('periodSummary.current.total_amount', 0)
             );
     }
 
@@ -915,10 +915,10 @@ class BillingFeaturesTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard', ['month' => 8, 'year' => 2026]))
             ->assertInertia(fn ($page) => $page
-                ->where('recurringSummary.paid_amount', 620)
-                ->where('recurringSummary.total_amount', 500)
+                ->where('recurringSummary.paid_amount', 0)
+                ->where('recurringSummary.total_amount', 0)
                 ->where('recurringSummary.pending_amount', 0)
-                ->where('recurringSummary.paid_percent', 124)
+                ->where('recurringSummary.paid_percent', 0)
             );
     }
 
@@ -1032,7 +1032,7 @@ class BillingFeaturesTest extends TestCase
             ->get(route('dashboard', ['month' => 8, 'year' => 2026]))
             ->assertInertia(fn ($page) => $page
                 ->where('recurringSummary.paid_amount', 0)
-                ->where('recurringSummary.pending_amount', 800)
+                ->where('recurringSummary.pending_amount', 0)
                 ->where('recurringSummary.paid_percent', 0)
             );
     }

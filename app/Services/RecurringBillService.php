@@ -110,8 +110,8 @@ class RecurringBillService
     }
 
     /**
-     * Progresso do mês: fixas (confirmed + planned) + variáveis (estimativa / pagos).
-     * Lançamento pulado não entra no total nem na porcentagem.
+     * Progresso do mês: só contas fixas com vencimento (confirmed + planned).
+     * Estimativa variável e lançamento pulado não entram no total nem na porcentagem.
      *
      * @return array{
      *     paid_amount: float,
@@ -151,11 +151,6 @@ class RecurringBillService
             ->whereBetween('date', $range)
             ->get(['id', 'amount', 'recurring_bill_id']);
 
-        $paidAmount = round((float) $confirmed->sum('amount'), 2);
-        $paidCount = $confirmed->count();
-        $plannedAmount = round((float) $planned->sum('amount'), 2);
-        $plannedCount = $planned->count();
-
         $paidByBill = $confirmed
             ->groupBy('recurring_bill_id')
             ->map(fn ($rows) => round((float) $rows->sum('amount'), 2))
@@ -167,47 +162,25 @@ class RecurringBillService
             ->whereBetween('date', $range)
             ->get(['id', 'amount', 'recurring_bill_id']);
 
-        $skippedBillIds = $skipped->pluck('recurring_bill_id')->unique()->all();
-        $skippedCount = count($skippedBillIds);
-        $skippedAmount = round((float) $skipped->sum('amount'), 2);
-
-        $variableBills = RecurringBill::query()
+        $variableBillIds = RecurringBill::query()
             ->when($view, fn ($q) => $q->forViewContext($view))
             ->where('kind', RecurringBill::KIND_VARIABLE)
-            ->countsInMonth($start)
-            ->get(['id', 'estimated_amount']);
+            ->pluck('id')
+            ->all();
 
-        $variableEstimateTotal = 0.0;
-        $variablePendingTotal = 0.0;
-        $variablePendingCount = 0;
-        $variableBillIds = [];
+        $isVariable = fn ($tx) => in_array($tx->recurring_bill_id, $variableBillIds, true);
 
-        foreach ($variableBills as $bill) {
-            if (in_array($bill->id, $skippedBillIds, true)) {
-                continue;
-            }
+        $fixedConfirmed = $confirmed->reject($isVariable);
+        $fixedPlanned = $planned->reject($isVariable);
+        $fixedSkipped = $skipped->reject($isVariable);
 
-            $variableBillIds[] = $bill->id;
-            $estimate = (float) $bill->estimated_amount;
-            $paid = (float) ($paidByBill[$bill->id] ?? 0);
-            $variableEstimateTotal += $estimate;
-            $remaining = max(0, round($estimate - $paid, 2));
-            $variablePendingTotal += $remaining;
-            if ($remaining > 0) {
-                $variablePendingCount++;
-            }
-        }
-
-        $fixedPaidAmount = round(
-            (float) $confirmed
-                ->reject(fn ($tx) => in_array($tx->recurring_bill_id, $variableBillIds, true))
-                ->sum('amount'),
-            2
-        );
-
-        $pendingAmount = round($plannedAmount + $variablePendingTotal, 2);
-        $totalAmount = round($fixedPaidAmount + $plannedAmount + $variableEstimateTotal, 2);
-        $pendingCount = $plannedCount + $variablePendingCount;
+        $paidAmount = round((float) $fixedConfirmed->sum('amount'), 2);
+        $paidCount = $fixedConfirmed->count();
+        $pendingAmount = round((float) $fixedPlanned->sum('amount'), 2);
+        $pendingCount = $fixedPlanned->count();
+        $skippedCount = $fixedSkipped->pluck('recurring_bill_id')->unique()->count();
+        $skippedAmount = round((float) $fixedSkipped->sum('amount'), 2);
+        $totalAmount = round($paidAmount + $pendingAmount, 2);
         $totalCount = $paidCount + $pendingCount;
         $paidPercent = $totalAmount > 0
             ? (int) round(($paidAmount / $totalAmount) * 100)
@@ -453,6 +426,17 @@ class RecurringBillService
             }
         }
 
+        $invoiceId = $data['credit_card_invoice_id'] ?? null;
+        $method = $data['payment_method'] ?? null;
+        $cardId = $data['payment_card_id'] ?? null;
+
+        if (! $invoiceId && $method === Transaction::PAYMENT_CARD && $cardId) {
+            $card = PaymentCard::query()->find($cardId);
+            if ($card) {
+                $invoiceId = $this->invoiceService->resolveForPurchase($card, $date)?->id;
+            }
+        }
+
         return Transaction::create([
             'account_id' => $user->account_id,
             'user_id' => $data['user_id'] ?? $user->id,
@@ -464,12 +448,37 @@ class RecurringBillService
             'amount' => $data['amount'],
             'description' => $data['description'],
             'date' => $data['date'],
-            'payment_method' => $data['payment_method'] ?? null,
-            'payment_card_id' => $data['payment_card_id'] ?? null,
+            'payment_method' => $method,
+            'payment_card_id' => $cardId,
             'bank_account_id' => null,
-            'credit_card_invoice_id' => $data['credit_card_invoice_id'] ?? null,
+            'credit_card_invoice_id' => $invoiceId,
             'recurring_bill_id' => $bill->id,
             'status' => Transaction::STATUS_CONFIRMED,
+        ]);
+    }
+
+    /**
+     * Lança um gasto já ocorrido numa conta variável. Não altera a porcentagem das fixas.
+     */
+    public function recordVariablePayment(User $user, RecurringBill $bill, array $data): Transaction
+    {
+        if (! $bill->isVariable()) {
+            throw new \InvalidArgumentException('Só contas variáveis recebem lançamento avulso.');
+        }
+
+        $this->deleteSkippedInMonth($bill, Carbon::parse($data['date']));
+
+        return $this->settleForBill($user, $bill, [
+            'amount' => $data['amount'],
+            'date' => $data['date'],
+            'description' => $data['description'] ?: $bill->description,
+            'category_id' => $bill->category_id,
+            'payment_method' => $bill->payment_method,
+            'payment_card_id' => $bill->payment_card_id,
+            'user_id' => $bill->user_id,
+            'is_shared' => (bool) $bill->is_shared,
+            'company_id' => $bill->company_id,
+            'created_by' => $user->id,
         ]);
     }
 

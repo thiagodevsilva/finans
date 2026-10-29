@@ -90,9 +90,9 @@ class RecurringBillLifecycleTest extends TestCase
             ->get(route('recurring-bills.index'))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->where('periodSummary.current.paid_percent', 75)
-                ->where('periodSummary.current.pending_amount', 1000)
-                ->where('periodSummary.current.total_amount', 4000)
+                ->where('periodSummary.current.paid_percent', 100)
+                ->where('periodSummary.current.pending_amount', 0)
+                ->where('periodSummary.current.total_amount', 3000)
             );
 
         $this->actingAs($owner)
@@ -107,7 +107,7 @@ class RecurringBillLifecycleTest extends TestCase
                 ->where('recurringSummary.pending_amount', 0)
                 ->where('recurringSummary.total_amount', 3000)
                 ->where('recurringSummary.paid_percent', 100)
-                ->where('recurringSummary.skipped_count', 1)
+                ->where('recurringSummary.skipped_count', 0)
             );
     }
 
@@ -309,7 +309,7 @@ class RecurringBillLifecycleTest extends TestCase
             ->get(route('dashboard', ['month' => 10, 'year' => 2026]))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->where('recurringSummary.pending_amount', 800)
+                ->where('recurringSummary.pending_amount', 0)
                 ->where('recurringSummary.paid_percent', 0)
             );
     }
@@ -342,7 +342,7 @@ class RecurringBillLifecycleTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('recurringSummary.pending_amount', 0)
                 ->where('recurringSummary.total_amount', 0)
-                ->where('recurringSummary.paid_percent', 100)
+                ->where('recurringSummary.paid_percent', 0)
             );
     }
 
@@ -374,6 +374,69 @@ class RecurringBillLifecycleTest extends TestCase
             ->assertNotFound();
 
         $this->assertTrue($bill->fresh()->active);
+    }
+
+    public function test_variable_payment_can_be_recorded_without_changing_fixed_percent(): void
+    {
+        $this->travelTo('2026-10-15 12:00:00');
+
+        [$owner, $category] = $this->family();
+        $fixed = $this->storeFixed($owner, $category, 'Aluguel', 3000, 5);
+        $planned = $this->plannedInMonth($fixed, '2026-10-01', '2026-10-31');
+
+        $this->actingAs($owner)
+            ->post(route('recurring-transactions.confirm', $planned), [
+                'amount' => 3000,
+                'date' => '2026-10-05',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($owner)
+            ->post(route('recurring-bills.store'), [
+                'description' => 'Tauste Pay',
+                'kind' => RecurringBill::KIND_VARIABLE,
+                'category_id' => $category->id,
+                'estimated_amount' => 1000,
+                'payment_method' => Transaction::PAYMENT_PIX,
+                'start_date' => '2026-10-01',
+            ])
+            ->assertRedirect();
+
+        $variable = RecurringBill::withoutGlobalScopes()->where('description', 'Tauste Pay')->firstOrFail();
+
+        $this->actingAs($owner)
+            ->post(route('recurring-bills.pay', $variable), [
+                'amount' => 180.5,
+                'date' => '2026-10-12',
+                'description' => 'Compra no Tauste',
+            ])
+            ->assertRedirect();
+
+        $payment = Transaction::withoutGlobalScopes()
+            ->where('recurring_bill_id', $variable->id)
+            ->where('status', Transaction::STATUS_CONFIRMED)
+            ->first();
+
+        $this->assertNotNull($payment);
+        $this->assertSame('Compra no Tauste', $payment->description);
+        $this->assertEquals(180.5, (float) $payment->amount);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard', ['month' => 10, 'year' => 2026]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('recurringSummary.paid_amount', 3000)
+                ->where('recurringSummary.pending_amount', 0)
+                ->where('recurringSummary.paid_percent', 100)
+            );
+
+        $this->actingAs($owner)
+            ->get(route('recurring-bills.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('bills', fn ($bills) => collect($bills)
+                    ->contains(fn ($bill) => $bill['id'] === $variable->id && (float) $bill['month_paid'] === 180.5))
+            );
     }
 
     /**

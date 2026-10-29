@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ConfirmRecurringTransactionRequest;
+use App\Http\Requests\PayVariableRecurringBillRequest;
 use App\Http\Requests\RecurringBillRequest;
 use App\Http\Requests\RecurringBillScopeRequest;
 use App\Models\BankAccount;
@@ -351,6 +352,19 @@ class RecurringBillController extends Controller
         return back()->with('success', 'Mês pulado. Esta conta não entra na porcentagem.');
     }
 
+    public function pay(PayVariableRecurringBillRequest $request, RecurringBill $recurringBill): RedirectResponse
+    {
+        $this->authorize('update', $recurringBill);
+
+        if (! $recurringBill->isVariable()) {
+            return back()->with('error', 'Essa conta tem vencimento. Confirme o lançamento previsto.');
+        }
+
+        $this->service->recordVariablePayment($request->user(), $recurringBill, $request->validated());
+
+        return back()->with('success', 'Pagamento lançado.');
+    }
+
     public function deactivate(RecurringBillScopeRequest $request, RecurringBill $recurringBill): RedirectResponse
     {
         $this->authorize('update', $recurringBill);
@@ -363,8 +377,8 @@ class RecurringBillController extends Controller
         $this->service->deactivate($recurringBill, $scope);
 
         $message = $scope === 'current'
-            ? 'Conta inativada. O mês atual foi removido.'
-            : 'Conta inativada. O mês atual foi mantido; os próximos não serão gerados.';
+            ? 'Conta inativada. Este mês e os próximos foram removidos.'
+            : 'Conta inativada. Este mês foi mantido; os próximos não serão gerados.';
 
         return back()->with('success', $message);
     }
@@ -381,8 +395,8 @@ class RecurringBillController extends Controller
         $this->service->activate($recurringBill, $scope);
 
         $message = $scope === 'current'
-            ? 'Conta ativada. O mês atual foi gerado.'
-            : 'Conta ativada. O mês atual ficou de fora; os próximos serão gerados.';
+            ? 'Conta ativada. Este mês e os próximos foram gerados.'
+            : 'Conta ativada a partir do próximo mês.';
 
         return back()->with('success', $message);
     }

@@ -61,7 +61,7 @@ database/migrations/
 7. **Despesa = compra.** Pagamento de fatura é `type=transfer` e **não** entra em totais de gasto.
 8. Relatórios/dashboard somam só `status=confirmed` e `type` income/expense (nunca transfer), filtrados pelo ViewContext. **Saldo** = caixa por membro (Todos = soma); **saldo do mês** = income − saídas de dinheiro do mês − investment.
 9. Parcelas: UI do mês mostra só a parcela do período; detalhe da compra no plano.
-10. Contas fixas: `planned` até confirmar; só confirmadas contam como gasto. Variáveis (`kind=variable`) não geram planned — vários lançamentos abatem a estimativa. No dashboard, % das contas fixas é por **valor**.
+10. Contas fixas: `planned` até confirmar; só confirmadas contam como gasto. Variáveis (`kind=variable`) não geram planned — vários lançamentos abatem a estimativa, sem entrar na porcentagem nem em “a pagar”. No dashboard, % das contas fixas é por **valor**.
 11. **Testes nunca usam o MySQL do app.** A suite força `sqlite :memory:` (`phpunit.xml` + `CreatesApplication`). Requer extensão `pdo_sqlite` (`php8.1-sqlite3`).
 12. Gasto sempre fica no membro (`user_id`); CNPJ (`company_id`) é tag, não carteira.
 

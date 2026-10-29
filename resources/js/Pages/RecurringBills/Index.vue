@@ -59,6 +59,13 @@ const confirmForm = useForm({
     date: '',
 });
 
+const paying = ref(null);
+const payForm = useForm({
+    amount: '',
+    date: '',
+    description: '',
+});
+
 watch(
     () => form.payment_selection,
     (value) => {
@@ -96,15 +103,18 @@ const paidPercent = computed(() => {
 
 const barPercent = computed(() => Math.min(100, Math.max(0, Number(paidPercent.value) || 0)));
 
-const openVariableBills = computed(() =>
+const variableMonthBills = computed(() =>
     props.bills.filter(
-        (bill) =>
-            bill.kind === 'variable'
-            && bill.counts_this_month
-            && !bill.month_skipped
-            && Number(bill.month_remaining) > 0,
+        (bill) => bill.kind === 'variable' && bill.counts_this_month && !bill.month_skipped,
     ),
 );
+
+const variablePaymentsFor = (billId) =>
+    props.paid.filter(
+        (item) => item.kind === 'variable'
+            && item.recurring_bill_id === billId
+            && String(item.date).startsWith(currentMonthKey.value || ''),
+    );
 
 const currentMonthPending = computed(() => {
     const key = currentMonthKey.value;
@@ -140,6 +150,7 @@ const scheduleByMonth = computed(() => {
     }
 
     for (const item of props.paid) {
+        if (item.kind === 'variable') continue;
         const key = String(item.date).slice(0, 7);
         const group = ensure(key);
         group.paid.push(item);
@@ -327,6 +338,30 @@ const submitConfirm = () => {
     });
 };
 
+const openPay = (bill) => {
+    paying.value = bill;
+    const remaining = Number(bill.month_remaining || 0);
+    payForm.amount = remaining > 0 ? remaining : '';
+    payForm.date = new Date().toISOString().slice(0, 10);
+    payForm.description = bill.description;
+    payForm.clearErrors();
+};
+
+const closePay = () => {
+    if (payForm.processing) return;
+    paying.value = null;
+    payForm.clearErrors();
+};
+
+const submitPay = () => {
+    if (!paying.value) return;
+    payForm.post(route('recurring-bills.pay', paying.value.id), {
+        onSuccess: () => {
+            paying.value = null;
+        },
+    });
+};
+
 const skip = (item) => {
     if (!confirm('Pular este lançamento no mês? Ele sai da porcentagem.')) return;
     router.post(route('recurring-transactions.skip', item.id));
@@ -427,27 +462,47 @@ const unconfirm = (item) => {
                         {{ currentSummary.skipped_count }} pulada{{ currentSummary.skipped_count === 1 ? '' : 's' }}
                         neste mês ({{ formatBRL(currentSummary.skipped_amount) }}) — fora da porcentagem
                     </p>
-                    <div v-if="openVariableBills.length" class="mt-3 space-y-2 border-t border-horizon-100 pt-3">
+                    <div v-if="variableMonthBills.length" class="mt-3 space-y-2 border-t border-horizon-100 pt-3">
                         <p class="text-xs text-horizon-500">
-                            Estimativa ainda em aberto neste mês. Pular tira o que falta da porcentagem.
+                            Variáveis deste mês. Lance o que você já gastou — isso não muda a porcentagem.
                         </p>
-                        <div
-                            v-for="bill in openVariableBills"
-                            :key="bill.id"
-                            class="flex items-center justify-between gap-2"
-                        >
-                            <p class="min-w-0 truncate text-sm text-navy-700">
-                                <span class="font-semibold">{{ bill.description }}</span>
-                                <span class="text-horizon-500"> · {{ formatBRL(bill.month_remaining) }} em aberto</span>
-                            </p>
-                            <button
-                                v-if="bill.can_edit"
-                                type="button"
-                                class="shrink-0 text-xs font-medium text-horizon-600 hover:underline sm:text-sm"
-                                @click="skipMonth(bill)"
+                        <div v-for="bill in variableMonthBills" :key="bill.id" class="space-y-1">
+                            <div class="flex items-center justify-between gap-2">
+                                <p class="min-w-0 truncate text-sm text-navy-700">
+                                    <span class="font-semibold">{{ bill.description }}</span>
+                                    <span class="text-horizon-500">
+                                        ·
+                                        <template v-if="Number(bill.month_paid) > 0">
+                                            {{ formatBRL(bill.month_paid) }} lançados
+                                        </template>
+                                        <template v-else>nada lançado</template>
+                                        · estimativa {{ formatBRL(bill.estimated_amount) }}
+                                    </span>
+                                </p>
+                                <button
+                                    v-if="bill.can_edit"
+                                    type="button"
+                                    class="shrink-0 rounded-lg bg-cta/10 px-2.5 py-1.5 text-xs font-semibold text-cta hover:bg-cta/15 sm:text-sm"
+                                    @click="openPay(bill)"
+                                >
+                                    Lançar
+                                </button>
+                            </div>
+                            <div
+                                v-for="item in variablePaymentsFor(bill.id)"
+                                :key="item.id"
+                                class="flex items-center justify-between gap-2 pl-3 text-xs text-horizon-600"
                             >
-                                Pular
-                            </button>
+                                <span class="truncate">{{ formatDate(item.date) }} · {{ formatBRL(item.amount) }}</span>
+                                <button
+                                    v-if="item.can_edit"
+                                    type="button"
+                                    class="shrink-0 font-medium hover:underline"
+                                    @click="unconfirm(item)"
+                                >
+                                    Desfazer
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <p v-if="nextSummary?.month" class="mt-3 text-xs text-horizon-500">
@@ -1088,6 +1143,36 @@ const unconfirm = (item) => {
             </div>
         </Modal>
 
+        <Modal :show="!!paying" max-width="md" @close="closePay">
+            <form class="p-5 sm:p-6" @submit.prevent="submitPay">
+                <h2 class="text-lg font-bold text-navy-700">Lançar pagamento</h2>
+                <p class="mt-1 text-sm text-horizon-600">
+                    {{ paying?.description }} · estimativa {{ formatBRL(paying?.estimated_amount) }}
+                </p>
+                <div class="mt-5 space-y-4">
+                    <div>
+                        <InputLabel value="Valor gasto (R$)" />
+                        <MoneyInput class="mt-1" v-model="payForm.amount" required />
+                        <InputError class="mt-1" :message="payForm.errors.amount" />
+                    </div>
+                    <div>
+                        <InputLabel value="Data" />
+                        <TextInput type="date" class="mt-1 block w-full" v-model="payForm.date" required />
+                        <InputError class="mt-1" :message="payForm.errors.date" />
+                    </div>
+                    <div>
+                        <InputLabel value="Descrição" />
+                        <TextInput class="mt-1 block w-full" v-model="payForm.description" />
+                        <InputError class="mt-1" :message="payForm.errors.description" />
+                    </div>
+                    <div class="flex justify-end gap-2 pt-1">
+                        <SecondaryButton type="button" @click="closePay">Cancelar</SecondaryButton>
+                        <PrimaryButton :disabled="payForm.processing">Lançar pagamento</PrimaryButton>
+                    </div>
+                </div>
+            </form>
+        </Modal>
+
         <Modal :show="!!lifecycle" max-width="md" @close="closeLifecycle">
             <div class="p-5 sm:p-6">
                 <h2 class="text-lg font-bold text-navy-700">
@@ -1097,32 +1182,46 @@ const unconfirm = (item) => {
                     {{ lifecycle?.bill?.description }}
                 </p>
                 <p v-if="lifecycle?.action === 'deactivate'" class="mt-2 text-sm text-horizon-600">
-                    A conta fica guardada e pode ser ativada de novo. Pagamentos já confirmados não são apagados.
-                    O que fazer com o mês atual?
+                    A conta fica guardada e pode ser ativada de novo. Pagamentos já confirmados permanecem.
+                    Os próximos meses deixam de ser gerados. A deste mês também sai?
                 </p>
                 <p v-else class="mt-2 text-sm text-horizon-600">
-                    A conta volta a se repetir. Gerar também a deste mês, ou só as próximas?
+                    A conta volta a se repetir nos próximos meses. Criar a deste mês também?
                 </p>
-                <div class="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                    <SecondaryButton type="button" :disabled="lifecycleProcessing" @click="closeLifecycle">
-                        Cancelar
-                    </SecondaryButton>
+                <div class="mt-5 flex flex-col gap-2">
                     <button
                         type="button"
-                        class="inline-flex items-center justify-center rounded-xl border border-horizon-200 bg-white px-4 py-2.5 text-sm font-semibold text-navy-700 hover:bg-horizon-50 disabled:opacity-50"
+                        class="rounded-xl border border-horizon-200 bg-white px-4 py-3 text-left disabled:opacity-50"
                         :disabled="lifecycleProcessing"
                         @click="submitLifecycle('future')"
                     >
-                        {{ lifecycle?.action === 'activate' ? 'Só nos próximos' : 'Só as próximas' }}
+                        <span class="block text-sm font-semibold text-navy-700">
+                            {{ lifecycle?.action === 'activate' ? 'Só nos próximos' : 'Manter a deste mês' }}
+                        </span>
+                        <span class="mt-0.5 block text-xs text-horizon-500">
+                            {{ lifecycle?.action === 'activate'
+                                ? 'Este mês fica de fora.'
+                                : 'Só as próximas deixam de ser geradas.' }}
+                        </span>
                     </button>
                     <button
                         type="button"
-                        class="inline-flex items-center justify-center rounded-xl bg-cta px-4 py-2.5 text-sm font-semibold text-white hover:bg-cta-dark disabled:opacity-50"
+                        class="rounded-xl bg-cta px-4 py-3 text-left text-white hover:bg-cta-dark disabled:opacity-50"
                         :disabled="lifecycleProcessing"
                         @click="submitLifecycle('current')"
                     >
-                        {{ lifecycle?.action === 'activate' ? 'Criar neste mês' : 'Remover a deste mês' }}
+                        <span class="block text-sm font-semibold">
+                            {{ lifecycle?.action === 'activate' ? 'Este mês e os próximos' : 'Remover este mês e os próximos' }}
+                        </span>
+                        <span class="mt-0.5 block text-xs text-white/80">
+                            {{ lifecycle?.action === 'activate'
+                                ? 'Gera a de agora e volta a repetir.'
+                                : 'Nada fica previsto a partir de agora.' }}
+                        </span>
                     </button>
+                    <SecondaryButton type="button" class="mt-1 w-full justify-center" :disabled="lifecycleProcessing" @click="closeLifecycle">
+                        Cancelar
+                    </SecondaryButton>
                 </div>
             </div>
         </Modal>
