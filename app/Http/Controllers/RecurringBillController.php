@@ -362,7 +362,7 @@ class RecurringBillController extends Controller
 
         $this->service->recordVariablePayment($request->user(), $recurringBill, $request->validated());
 
-        return back()->with('success', 'Pagamento lançado.');
+        return back()->with('success', 'Gasto registrado. Já está pago e saiu do caixa.');
     }
 
     public function deactivate(RecurringBillScopeRequest $request, RecurringBill $recurringBill): RedirectResponse

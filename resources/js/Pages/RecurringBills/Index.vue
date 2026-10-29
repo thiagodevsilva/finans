@@ -116,6 +116,12 @@ const variablePaymentsFor = (billId) =>
             && String(item.date).startsWith(currentMonthKey.value || ''),
     );
 
+const variablePercent = (bill) => {
+    const estimate = Number(bill.estimated_amount) || 0;
+    if (estimate <= 0) return 0;
+    return Math.round((Number(bill.month_paid || 0) / estimate) * 100);
+};
+
 const currentMonthPending = computed(() => {
     const key = currentMonthKey.value;
     if (!key) return [];
@@ -368,7 +374,7 @@ const skip = (item) => {
 };
 
 const skipMonth = (bill) => {
-    if (!confirm(`Pular "${bill.description}" neste mês? A estimativa sai da porcentagem.`)) return;
+    if (!confirm(`Não registrar nada em "${bill.description}" neste mês?`)) return;
     router.post(route('recurring-bills.skip-month', bill.id));
 };
 
@@ -462,49 +468,6 @@ const unconfirm = (item) => {
                         {{ currentSummary.skipped_count }} pulada{{ currentSummary.skipped_count === 1 ? '' : 's' }}
                         neste mês ({{ formatBRL(currentSummary.skipped_amount) }}) — fora da porcentagem
                     </p>
-                    <div v-if="variableMonthBills.length" class="mt-3 space-y-2 border-t border-horizon-100 pt-3">
-                        <p class="text-xs text-horizon-500">
-                            Variáveis deste mês. Lance o que você já gastou — isso não muda a porcentagem.
-                        </p>
-                        <div v-for="bill in variableMonthBills" :key="bill.id" class="space-y-1">
-                            <div class="flex items-center justify-between gap-2">
-                                <p class="min-w-0 truncate text-sm text-navy-700">
-                                    <span class="font-semibold">{{ bill.description }}</span>
-                                    <span class="text-horizon-500">
-                                        ·
-                                        <template v-if="Number(bill.month_paid) > 0">
-                                            {{ formatBRL(bill.month_paid) }} lançados
-                                        </template>
-                                        <template v-else>nada lançado</template>
-                                        · estimativa {{ formatBRL(bill.estimated_amount) }}
-                                    </span>
-                                </p>
-                                <button
-                                    v-if="bill.can_edit"
-                                    type="button"
-                                    class="shrink-0 rounded-lg bg-cta/10 px-2.5 py-1.5 text-xs font-semibold text-cta hover:bg-cta/15 sm:text-sm"
-                                    @click="openPay(bill)"
-                                >
-                                    Lançar
-                                </button>
-                            </div>
-                            <div
-                                v-for="item in variablePaymentsFor(bill.id)"
-                                :key="item.id"
-                                class="flex items-center justify-between gap-2 pl-3 text-xs text-horizon-600"
-                            >
-                                <span class="truncate">{{ formatDate(item.date) }} · {{ formatBRL(item.amount) }}</span>
-                                <button
-                                    v-if="item.can_edit"
-                                    type="button"
-                                    class="shrink-0 font-medium hover:underline"
-                                    @click="unconfirm(item)"
-                                >
-                                    Desfazer
-                                </button>
-                            </div>
-                        </div>
-                    </div>
                     <p v-if="nextSummary?.month" class="mt-3 text-xs text-horizon-500">
                         Próximo mês · {{ monthLabel(nextSummary.month) }}:
                         <span class="font-medium text-navy-700">{{ nextSummary.pending_count }} previstas</span>
@@ -566,6 +529,86 @@ const unconfirm = (item) => {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </section>
+
+                <section v-if="variableMonthBills.length" class="mb-4 sm:mb-5">
+                    <h2 class="mb-1 text-base font-bold text-navy-700 sm:text-lg">Gastos variáveis</h2>
+                    <p class="mb-3 text-xs text-horizon-500 sm:text-sm">
+                        Sem vencimento. Registrar o gasto já paga: o valor sai do caixa e entra nas transações.
+                    </p>
+                    <div class="space-y-3">
+                        <article
+                            v-for="bill in variableMonthBills"
+                            :key="bill.id"
+                            class="overflow-hidden rounded-[16px] bg-white shadow-soft"
+                        >
+                            <div class="flex items-start justify-between gap-3 px-4 py-3">
+                                <div class="min-w-0">
+                                    <h3 class="truncate text-sm font-semibold text-navy-700">{{ bill.description }}</h3>
+                                    <p class="mt-0.5 text-xs text-horizon-500">
+                                        {{ formatBRL(bill.month_paid || 0) }} gastos neste mês
+                                        · meta {{ formatBRL(bill.estimated_amount) }}
+                                        ({{ variablePercent(bill) }}%)
+                                    </p>
+                                </div>
+                                <button
+                                    v-if="bill.can_edit"
+                                    type="button"
+                                    class="shrink-0 rounded-lg bg-cta/10 px-2.5 py-1.5 text-xs font-semibold text-cta hover:bg-cta/15 sm:text-sm"
+                                    @click="openPay(bill)"
+                                >
+                                    {{ Number(bill.month_paid) > 0 ? 'Registrar outro' : 'Registrar gasto' }}
+                                </button>
+                            </div>
+                            <div class="px-4 pb-3">
+                                <div class="h-1.5 overflow-hidden rounded-full bg-horizon-100">
+                                    <div
+                                        class="h-full rounded-full bg-brand-500"
+                                        :style="{ width: `${Math.min(variablePercent(bill), 100)}%` }"
+                                    />
+                                </div>
+                            </div>
+                            <div v-if="variablePaymentsFor(bill.id).length" class="border-t border-horizon-100">
+                                <p class="bg-emerald-50/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                                    Pagos neste mês · {{ variablePaymentsFor(bill.id).length }}
+                                    · {{ formatBRL(bill.month_paid) }}
+                                </p>
+                                <div class="divide-y divide-horizon-100">
+                                    <div
+                                        v-for="item in variablePaymentsFor(bill.id)"
+                                        :key="item.id"
+                                        class="flex items-center justify-between gap-2 px-4 py-2.5"
+                                    >
+                                        <div class="min-w-0">
+                                            <p class="truncate text-sm font-medium text-navy-700">{{ item.description }}</p>
+                                            <p class="truncate text-xs text-horizon-500">
+                                                {{ formatDate(item.date) }} · {{ formatBRL(item.amount) }}
+                                            </p>
+                                        </div>
+                                        <div class="flex shrink-0 items-center gap-2">
+                                            <button
+                                                v-if="item.can_edit"
+                                                type="button"
+                                                class="px-1 py-1.5 text-xs font-medium text-horizon-600 hover:underline sm:text-sm"
+                                                @click="unconfirm(item)"
+                                            >
+                                                Desfazer
+                                            </button>
+                                            <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                                                Pago
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p
+                                v-else
+                                class="border-t border-horizon-100 px-4 py-3 text-xs text-horizon-500"
+                            >
+                                Nenhum gasto registrado neste mês.
+                            </p>
+                        </article>
                     </div>
                 </section>
 
@@ -897,9 +940,9 @@ const unconfirm = (item) => {
                                     v-if="bill.kind === 'variable' && bill.active && bill.counts_this_month && !bill.month_skipped"
                                     type="button"
                                     class="font-medium text-horizon-700 hover:underline"
-                                    @click="skipMonth(bill)"
+                                    @click="openPay(bill)"
                                 >
-                                    Pular mês
+                                    Registrar gasto
                                 </button>
                                 <button type="button" class="font-medium text-red-600 hover:underline" @click="destroy(bill)">
                                     Excluir
@@ -1145,13 +1188,16 @@ const unconfirm = (item) => {
 
         <Modal :show="!!paying" max-width="md" @close="closePay">
             <form class="p-5 sm:p-6" @submit.prevent="submitPay">
-                <h2 class="text-lg font-bold text-navy-700">Lançar pagamento</h2>
+                <h2 class="text-lg font-bold text-navy-700">Registrar gasto</h2>
                 <p class="mt-1 text-sm text-horizon-600">
-                    {{ paying?.description }} · estimativa {{ formatBRL(paying?.estimated_amount) }}
+                    {{ paying?.description }} · meta {{ formatBRL(paying?.estimated_amount) }}
+                </p>
+                <p class="mt-2 text-sm text-horizon-600">
+                    Isso já paga: o valor sai do caixa e aparece nas transações. Não tem outra etapa.
                 </p>
                 <div class="mt-5 space-y-4">
                     <div>
-                        <InputLabel value="Valor gasto (R$)" />
+                        <InputLabel value="Quanto você gastou (R$)" />
                         <MoneyInput class="mt-1" v-model="payForm.amount" required />
                         <InputError class="mt-1" :message="payForm.errors.amount" />
                     </div>
@@ -1167,7 +1213,7 @@ const unconfirm = (item) => {
                     </div>
                     <div class="flex justify-end gap-2 pt-1">
                         <SecondaryButton type="button" @click="closePay">Cancelar</SecondaryButton>
-                        <PrimaryButton :disabled="payForm.processing">Lançar pagamento</PrimaryButton>
+                        <PrimaryButton :disabled="payForm.processing">Registrar gasto</PrimaryButton>
                     </div>
                 </div>
             </form>
