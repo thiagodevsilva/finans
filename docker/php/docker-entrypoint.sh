@@ -16,8 +16,14 @@ if [ -d "$RELEASE_DIR/assets" ]; then
   if [ -f "$RELEASE_DIR/manifest.json" ]; then
     cp -a "$RELEASE_DIR/manifest.json" "$BUILD_DIR/manifest.json"
   fi
-  # Remove só arquivos bem antigos para não crescer sem limite.
-  find "$BUILD_DIR/assets" -type f -mtime +14 -delete 2>/dev/null || true
+  # cp -a preserva o mtime do build da imagem. Sem esta proteção, um restart
+  # depois de 14 dias apaga o JS/CSS da release atual e a UI fica em branco.
+  find "$BUILD_DIR/assets" -type f -mtime +14 | while IFS= read -r f; do
+    rel="${f#"$BUILD_DIR/assets/"}"
+    if [ ! -f "$RELEASE_DIR/assets/$rel" ]; then
+      rm -f "$f"
+    fi
+  done
   chown -R www-data:www-data "$BUILD_DIR"
 fi
 
